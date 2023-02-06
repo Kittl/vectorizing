@@ -1,0 +1,4 @@
+flask
+opencv-python
+scikit-image
+pypotrace
