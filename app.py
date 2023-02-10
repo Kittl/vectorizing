@@ -2,6 +2,7 @@ from flask import Flask, request
 from process_binary import process as process_binary
 from markup import build_markup
 from read import ReadError, ChannelCountError, SizeError
+print('Vectorizing started')
 
 app = Flask(__name__)
 
@@ -30,3 +31,5 @@ def process():
     
     except (ReadError, ChannelCountError, SizeError) as e:
         return str(e), 400
+
+app.run(host='0.0.0.0', port=8000)
