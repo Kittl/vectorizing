@@ -2,5 +2,7 @@ version: "3.9"
 services:
   web:
     build: .
+    environment:
+      - PORT=8000
     ports:
       - "8000:8000"

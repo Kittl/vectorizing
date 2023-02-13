@@ -1,12 +1,13 @@
+import os
 from flask import Flask, request
 from process_binary import process as process_binary
 from markup import build_markup
 from read import ReadError, ChannelCountError, SizeError
-print('Vectorizing started')
 
 app = Flask(__name__)
 
 NO_URL_ERROR = 'Image URL not provided.'
+PORT = os.environ['PORT']
 
 @app.route('/', methods = ['GET'])
 def process():
@@ -32,4 +33,9 @@ def process():
     except (ReadError, ChannelCountError, SizeError) as e:
         return str(e), 400
 
-app.run(host='0.0.0.0', port=8000)
+@app.route('/health', methods = ['GET'])
+def healthcheck():
+    return "OK"
+
+print(f"Vectorizing running in port {PORT}")
+app.run(host='0.0.0.0', port=PORT)
