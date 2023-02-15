@@ -4,5 +4,5 @@ RUN apt-get -y install build-essential python-dev libagg-dev libpotrace-dev pkg-
 WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install -r requirements.txt
-COPY . .
+COPY /src/ /app/src/
 CMD python /app/src/app.py
