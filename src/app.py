@@ -7,13 +7,14 @@ import boto3
 import cuid
 import json
 import check_variables
+from gevent.pywsgi import WSGIServer
 
 check_variables(); # Halt if the required environment variables are not defined
 
 app = Flask(__name__)
 
 NO_URL_ERROR = 'Image URL not provided.'
-PORT = os.environ['PORT']
+PORT = int(os.environ['PORT'])
 S3_UPLOADS_BUCKET = os.environ['VECTORIZING_S3_BUCKET']
 S3 = boto3.client("s3")
 
@@ -51,5 +52,7 @@ def process():
 def healthcheck():
     return "OK"
 
-print(f"Vectorizing running in port {PORT}")
-app.run(host='0.0.0.0', port=PORT)
+if __name__ == '__main__':
+    print(f"Vectorizing running in port {PORT}")
+    http_server = WSGIServer(("0.0.0.0", PORT), app)
+    http_server.serve_forever()
