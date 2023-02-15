@@ -4,3 +4,4 @@ scikit-image
 pypotrace
 boto3
 cuid
+gevent
