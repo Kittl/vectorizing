@@ -1,49 +1,44 @@
-import os
-from flask import Flask, request
-from process_binary import process as process_binary
-from markup import build_markup
-from read import ReadError, ChannelCountError, SizeError
-import boto3
-import cuid
 import json
-import check_variables
+from flask import Flask, request
+from markup import build_markup
 from gevent.pywsgi import WSGIServer
 
-check_variables(); # Halt if the required environment variables are not defined
+from s3 import upload_markup
+from read import ReadError, ChannelCountError, SizeError
+from environ import check_environment_variables
+from process_binary import process as process_binary
+
+(
+    PORT, 
+    VECTORIZING_S3_BUCKET, 
+    AWS_ACCESS_KEY_ID, 
+    AWS_SECRET_ACCESS_KEY
+) = check_environment_variables()
 
 app = Flask(__name__)
 
-NO_URL_ERROR = 'Image URL not provided.'
-PORT = int(os.environ['PORT'])
-S3_UPLOADS_BUCKET = os.environ['VECTORIZING_S3_BUCKET']
-S3 = boto3.client("s3")
-
-@app.route('/', methods = ['GET'])
+@app.route('/', methods = ['POST'])
 def process():
 
-    args = request.args
+    args = request.form
     
     if not 'url' in args:
-        return NO_URL_ERROR, 400
+        return 'Image URL not provided!', 400
 
     url = args.get('url')
 
     try:
         traced_bitmaps, colors, img_width, img_height = process_binary(url)
+
         markup = build_markup(
             traced_bitmaps,
             colors,
             img_width,
             img_height
         )
-        cuidStr = cuid.cuid()
-        S3.put_object(
-            Body=markup.encode('utf-8'),
-            Bucket=S3_UPLOADS_BUCKET,
-            Key=cuidStr,
-            ContentType="image/svg+xml",
-        )
-        return json.dumps({ "objectId": cuidStr })
+        
+        cuid_str = upload_markup(markup, VECTORIZING_S3_BUCKET)
+        return json.dumps({ 'objectId': cuid_str })
     
     except (ReadError, ChannelCountError, SizeError) as e:
         return str(e), 400
@@ -53,6 +48,6 @@ def healthcheck():
     return "OK"
 
 if __name__ == '__main__':
-    print(f"Vectorizing running in port {PORT}")
-    http_server = WSGIServer(("0.0.0.0", PORT), app)
+    print(f'Vectorizing server running on port: {PORT}')
+    http_server = WSGIServer(('0.0.0.0', PORT), app)
     http_server.serve_forever()

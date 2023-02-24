@@ -14,7 +14,7 @@ Tracing with binary (black & white output)
 Steps:
 
 -   Thresholding: Images are converted to grayscale and thresholded with different strategies.
-    Thresholded are single channel, and binary in nature, even if pixel values are not ones or zeros.
+    Thresholded images are single channel, and binary in nature, even if pixel values are not ones or zeros.
 
 -   Conversion to Bitmap: Thresholded images are converted to bitmaps where each pixel's value
     can be represented by a single bit (0 / 1), even if the channel's bit-depth is not 1
