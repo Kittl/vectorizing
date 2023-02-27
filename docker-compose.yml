@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  web:
+    build: .
+    environment:
+      - PORT=8000
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - VECTORIZING_S3_BUCKET=${VECTORIZING_S3_BUCKET}
+    ports:
+      - "8000:8000"
