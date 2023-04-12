@@ -67,5 +67,6 @@ def build_markup (potrace_paths, colors, img_width, img_height):
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{img_width}" height="{img_height}" viewBox="0 0 {img_width} {img_height}">\n'
         f'<g>\n{paths_markup}\n</g>\n'
+        f'<rect x="0" y="0" width="{img_width}" height="{img_height}" fill="transparent" class="kittl-util_ignore-outline"/>'
         f'</svg>'
     )
