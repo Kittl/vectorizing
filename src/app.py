@@ -1,12 +1,11 @@
 import json
-from flask import Flask, request
-from markup import build_markup
-from gevent.pywsgi import WSGIServer
-
 from s3 import upload_markup
-from read import ReadError, ChannelCountError, SizeError
+from flask import Flask, request
+from gevent.pywsgi import WSGIServer
 from environ import check_environment_variables
-from process_binary import process as process_binary
+from read import ReadError, ChannelCountError, SizeError
+from markup import build_markup, DEFAULTS as MARKUP_DEFAULTS
+from process_binary import process as process_binary, DEFAULTS as PROCESS_DEFAULTS
 
 (
     PORT, 
@@ -20,21 +19,24 @@ app = Flask(__name__)
 @app.route('/', methods = ['POST'])
 def process():
 
-    args = request.form
+    args = request.json
     
     if not 'url' in args:
         return 'Image URL not provided!', 400
 
     url = args.get('url')
+    thresholding_method = args.get('thresholding_method', PROCESS_DEFAULTS['thresholding_method'])
+    include_bounds = args.get('include_bounds', MARKUP_DEFAULTS['include_bounds'])
 
     try:
-        traced_bitmaps, colors, img_width, img_height = process_binary(url)
+        traced_bitmaps, colors, img_width, img_height = process_binary(url, thresholding_method)
 
         markup = build_markup(
             traced_bitmaps,
             colors,
             img_width,
-            img_height
+            img_height,
+            include_bounds
         )
         
         cuid_str = upload_markup(markup, VECTORIZING_S3_BUCKET)
