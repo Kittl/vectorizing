@@ -1,11 +1,14 @@
 import cv2
 import numpy as np
 import potrace
-from read import read_image, is_single_channel, is_RGB, get_width, get_height
+from read import read_image, is_single_channel, is_RGBA, get_width, get_height
 
 # Aliases for colors
 BLACK = [0, 0, 0, 1]
-TRANSPARENT = [0, 0, 0, 0]
+
+DEFAULTS = {
+    'thresholding_method': 'SIMPLE'
+}
 
 """ 
 
@@ -24,14 +27,7 @@ Steps:
 TODO: Research thresholding in general, and see if we can improve results. For now though,
 the current implementation should be enough for our use cases
 
-TODO: Look into differences between RGB vs RGBA thresholding.
-
 """
-
-THRESHOLDING_METHODS = {
-    'Simple': 0,
-    'Adaptive': 1
-}
 
 def threshold_adaptive (img_grayscale, line_width = 5):
     return cv2.adaptiveThreshold(
@@ -46,27 +42,38 @@ def threshold_adaptive (img_grayscale, line_width = 5):
 def threshold_simple (img_grayscale):
     return cv2.threshold(
         img_grayscale,
-        127,
+        0,
         255,
-        cv2.THRESH_BINARY_INV
+        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
     )[1].astype(np.uint8)
 
 def make_bitmap (img, method):
 
     # Grayscale conversion
     if not is_single_channel(img):
-        conversion_method = cv2.COLOR_RGB2GRAY if is_RGB(img) else cv2.COLOR_RGBA2GRAY
-        
+
+        # If the image is in RGBA format, composite it on top of a white background
+        # by combining linearly
+        if is_RGBA(img):
+            r, g, b, a = cv2.split(img)
+            n_alpha = a / 255
+
+            r = (255 * (1 - n_alpha) + r * n_alpha).astype(np.uint8)
+            g = (255 * (1 - n_alpha) + g * n_alpha).astype(np.uint8)
+            b = (255 * (1 - n_alpha) + b * n_alpha).astype(np.uint8)
+
+            img = cv2.merge((r, g, b))
+                    
         img_grayscale = cv2.cvtColor(
             img, 
-            conversion_method
+            cv2.COLOR_RGB2GRAY
         )
 
     # If image is single channel, no conversion is needed
     else:
         img_grayscale = img
 
-    if method == THRESHOLDING_METHODS['Simple']:
+    if method == 'SIMPLE':
         thresholded = threshold_simple(img_grayscale)
 
     else:
@@ -75,7 +82,7 @@ def make_bitmap (img, method):
     
     return np.where(thresholded < 128, 0, 1).astype(np.uint32)
 
-def process (url, thresholding_method = THRESHOLDING_METHODS['Simple']):
+def process (url, thresholding_method = DEFAULTS['thresholding_method']):
     img = read_image(url)
     bitmap = make_bitmap(img, thresholding_method)
     width = get_width(img)
