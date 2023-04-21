@@ -22,10 +22,12 @@ def process():
 
     args = request.form
     
-    if not 'url' in args:
+    json_args = request.json
+    
+    if not 'url' in args and not 'url' in json_args:
         return 'Image URL not provided!', 400
 
-    url = args.get('url')
+    url = args.get('url') or json_args.get('url')
 
     try:
         traced_bitmaps, colors, img_width, img_height = process_binary(url)
