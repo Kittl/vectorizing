@@ -1,10 +1,11 @@
 import json
 from s3 import upload_markup
+from bounds import get_bounds
 from flask import Flask, request
 from gevent.pywsgi import WSGIServer
 from environ import check_environment_variables
 from read import ReadError, ChannelCountError, SizeError
-from markup import build_markup, DEFAULTS as MARKUP_DEFAULTS
+from markup import build_markup
 from process_binary import process as process_binary, DEFAULTS as PROCESS_DEFAULTS
 
 (
@@ -26,7 +27,6 @@ def process():
 
     url = args.get('url')
     thresholding_method = args.get('thresholding_method', PROCESS_DEFAULTS['thresholding_method'])
-    include_bounds = args.get('include_bounds', MARKUP_DEFAULTS['include_bounds'])
 
     try:
         traced_bitmaps, colors, img_width, img_height = process_binary(url, thresholding_method)
@@ -36,11 +36,19 @@ def process():
             colors,
             img_width,
             img_height,
-            include_bounds
         )
+
+        bounds = get_bounds(traced_bitmaps)
         
         cuid_str = upload_markup(markup, VECTORIZING_S3_BUCKET)
-        return json.dumps({ 'objectId': cuid_str })
+        return json.dumps({ 
+            'objectId': cuid_str, 
+            'info': {
+                'bounds': bounds,
+                'image_width': img_width,
+                'image_height': img_height
+            }
+        })
     
     except (Exception) as e:
         return str(e), 400
