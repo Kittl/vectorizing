@@ -20,13 +20,22 @@ app = Flask(__name__)
 @app.route('/', methods = ['POST'])
 def process():
 
-    args = request.json
-    
+    content_type = request.headers['Content-Type']
+
+    if content_type == 'application/json':
+        args = request.json
+    else:
+        args = request.form
+        
     if not 'url' in args:
         return 'Image URL not provided!', 400
 
     url = args.get('url')
-    thresholding_method = args.get('thresholding_method', PROCESS_DEFAULTS['thresholding_method'])
+    
+    thresholding_method = args.get(
+        'thresholding_method', 
+        PROCESS_DEFAULTS['thresholding_method']
+    )
 
     try:
         traced_bitmaps, colors, img_width, img_height = process_binary(url, thresholding_method)
