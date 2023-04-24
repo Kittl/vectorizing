@@ -21,13 +21,11 @@ app = Flask(__name__)
 def process():
 
     args = request.form
-    
-    json_args = request.json
-    
-    if not 'url' in args and not 'url' in json_args:
+        
+    if not 'url' in args:
         return 'Image URL not provided!', 400
 
-    url = args.get('url') or json_args.get('url')
+    url = args.get('url')
 
     try:
         traced_bitmaps, colors, img_width, img_height = process_binary(url)
@@ -42,7 +40,7 @@ def process():
         cuid_str = upload_markup(markup, VECTORIZING_S3_BUCKET)
         return json.dumps({ 'objectId': cuid_str })
     
-    except (ReadError, ChannelCountError, SizeError) as e:
+    except (Exception) as e:
         return str(e), 400
 
 @app.route('/health', methods = ['GET'])
