@@ -1,7 +1,10 @@
 import json
+import logging
+import os
+import sentry_sdk
 from s3 import upload_markup
 from bounds import get_bounds
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from gevent.pywsgi import WSGIServer
 from environ import check_environment_variables
 from read import ReadError, ChannelCountError, SizeError
@@ -12,7 +15,7 @@ from process_binary import process as process_binary, DEFAULTS as PROCESS_DEFAUL
     PORT, 
     VECTORIZING_S3_BUCKET, 
     AWS_ACCESS_KEY_ID, 
-    AWS_SECRET_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY,
 ) = check_environment_variables()
 
 app = Flask(__name__)
@@ -28,7 +31,10 @@ def process():
         args = request.form
         
     if not 'url' in args:
-        return 'Image URL not provided!', 400
+        return jsonify({
+            "success": False,
+            "error": "INVALID_PARAMETERS"
+        }), 400
 
     url = args.get('url')
     
@@ -48,9 +54,10 @@ def process():
         )
 
         bounds = get_bounds(traced_bitmaps)
-        
         cuid_str = upload_markup(markup, VECTORIZING_S3_BUCKET)
-        return json.dumps({ 
+        app.logger.info(f'Generated objectId {cuid_str}')
+        return jsonify({ 
+            'success': True,
             'objectId': cuid_str, 
             'info': {
                 'bounds': bounds,
@@ -60,13 +67,24 @@ def process():
         })
     
     except (Exception) as e:
-        return str(e), 400
+        app.logger.error(e)
+        return jsonify({
+            "success": False,
+            "error": "INTERNAL_SERVER_ERROR"
+        }), 500
 
 @app.route('/health', methods = ['GET'])
 def healthcheck():
-    return "OK"
+    return jsonify({
+            "success": True,
+        }), 200
 
 if __name__ == '__main__':
-    print(f'Vectorizing server running on port: {PORT}')
+    app.logger.info(f'Vectorizing server running on port: {PORT}')
+    if "SENTRY_DSN" in os.environ:
+        sentry_sdk.init(
+            dsn=os.environ.get("SENTRY_DSN"),
+            traces_sample_rate=0.1
+        )
     http_server = WSGIServer(('0.0.0.0', PORT), app)
     http_server.serve_forever()
