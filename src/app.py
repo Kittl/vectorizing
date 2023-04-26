@@ -10,6 +10,21 @@ from environ import check_environment_variables
 from read import ReadError, ChannelCountError, SizeError
 from markup import build_markup
 from process_binary import process as process_binary, DEFAULTS as PROCESS_DEFAULTS
+from logging.config import dictConfig
+
+# Set up Flask logging to STDOUT
+dictConfig({
+    'version': 1,
+    'handlers': {'wsgi': {
+        'class': 'logging.StreamHandler',
+        'stream': 'ext://sys.stdout',
+    }},
+    'root': {
+        'level': 'INFO',
+        'handlers': ['wsgi']
+    }
+})
+
 
 (
     PORT, 
