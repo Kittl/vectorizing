@@ -5,3 +5,4 @@ pypotrace
 boto3
 cuid
 gevent
+sentry-sdk
