@@ -64,6 +64,7 @@ def build_markup (potrace_paths, colors, img_width, img_height):
     ]
 
     paths_markup = '\n'.join(paths_markup_items)
+
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{img_width}" height="{img_height}" viewBox="0 0 {img_width} {img_height}">\n'
         f'<g>\n{paths_markup}\n</g>\n'
