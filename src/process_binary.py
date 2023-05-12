@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
 import potrace
-from read import read_image, is_single_channel, is_RGBA, get_width, get_height
+from read import read_image, is_single_channel, is_RGBA, get_width, get_height, get_pixel_count
+from PIL import Image
 
 # Aliases for colors
 BLACK = [0, 0, 0, 1]
@@ -34,7 +35,7 @@ def threshold_adaptive (img_grayscale, line_width = 5):
         img_grayscale,
         255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV,
+        cv2.THRESH_BINARY,
         line_width,
         2
     ).astype(np.uint8)
@@ -44,43 +45,97 @@ def threshold_simple (img_grayscale):
         img_grayscale,
         0,
         255,
-        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+        cv2.THRESH_BINARY + cv2.THRESH_OTSU
     )[1].astype(np.uint8)
 
+def threshold (img_grayscale, method):
+    if method == 'SIMPLE':
+        return threshold_simple(img_grayscale)
+    
+    return threshold_adaptive(img_grayscale)
+
+def rgba_on_white (img):
+    r, g, b, a = cv2.split(img)
+    n_alpha = a / 255
+
+    r = (255 * (1 - n_alpha) + r * n_alpha).astype(np.uint8)
+    g = (255 * (1 - n_alpha) + g * n_alpha).astype(np.uint8)
+    b = (255 * (1 - n_alpha) + b * n_alpha).astype(np.uint8)
+
+    return cv2.merge((r, g, b))
+
+def invert (img):
+    if is_RGBA(img):
+        r, g, b, a = cv2.split(img)
+        r = 255 - r
+        g = 255 - g
+        b = 255 - b
+        return cv2.merge((r, g, b, a))
+    
+    return 255 - img
+
 def make_bitmap (img, method):
+    inverted = invert(img)
 
-    # Grayscale conversion
     if not is_single_channel(img):
-
-        # If the image is in RGBA format, composite it on top of a white background
-        # by combining linearly
+        
         if is_RGBA(img):
-            r, g, b, a = cv2.split(img)
-            n_alpha = a / 255
-
-            r = (255 * (1 - n_alpha) + r * n_alpha).astype(np.uint8)
-            g = (255 * (1 - n_alpha) + g * n_alpha).astype(np.uint8)
-            b = (255 * (1 - n_alpha) + b * n_alpha).astype(np.uint8)
-
-            img = cv2.merge((r, g, b))
+            img = rgba_on_white(img)
+            inverted = rgba_on_white(inverted)
                     
-        img_grayscale = cv2.cvtColor(
+        # Grayscale conversion
+        grayscale = cv2.cvtColor(
             img, 
             cv2.COLOR_RGB2GRAY
         )
 
-    # If image is single channel, no conversion is needed
-    else:
-        img_grayscale = img
+        inverted_grayscale = cv2.cvtColor(
+            inverted,
+            cv2.COLOR_RGB2GRAY
+        )
 
-    if method == 'SIMPLE':
-        thresholded = threshold_simple(img_grayscale)
-
+        candidates = [grayscale, inverted_grayscale]
+    
     else:
-        thresholded = threshold_adaptive(img_grayscale)
+        candidates = [img, inverted]
+
+    candidates = [threshold(img, method) for img in candidates]
+
+    bitmap, inverted_bitmap = [
+        np.where(candidate == 255, 0, 1).astype(np.uint32) 
+        for candidate in candidates
+    ]
+
+    pixel_count = get_pixel_count(img)
+    foreground_area = np.sum(bitmap)
+    inverted_foreground_area = np.sum(inverted_bitmap)
+
+    if (foreground_area / pixel_count) < 0.01:
+        # If total area of the foreground is less than 1 percent of the image's
+
+        # It's possible that the inverted image produced a better bitmap.
+        # The main relevant case is an all-or-mostly white foreground with a transparent background.
+
+        #NOTE: The inverted bitmap CAN be worse than the non-inverted one.
+        # e.g A very small amount of black pixels on a transparent background
+
+        if inverted_foreground_area > foreground_area:
+            # Then we say the inverted bitmap is better. And its area is at least 1.
+            return inverted_bitmap
+
+    if foreground_area != 0:
+        # If the non-inverted foreground has an area greater than zero
+        # there are two possibilities:
+        # 1. It's less than 1% of the image's, but no alternative was found
+        # 2. It's more than 1% of the image's
+
+        # In both cases we are happy returning bitmap
+        return bitmap
     
-    
-    return np.where(thresholded < 128, 0, 1).astype(np.uint32)
+    # If the non-inverted foreground has an area of zero
+    # And no alternative was found, just return a black rectangle
+    # e.g Fully transparent image
+    return np.ones(bitmap.shape)
 
 def process (url, thresholding_method = DEFAULTS['thresholding_method']):
     img = read_image(url)
