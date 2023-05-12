@@ -1,5 +1,8 @@
-from skimage import io
 import numpy as np
+from PIL import Image
+import requests
+from io import BytesIO
+
 
 CHANNEL_COUNT_ERROR = 'Image channel count not supported.'
 READ_ERROR = 'Failed to read image from provided URL.'
@@ -60,10 +63,16 @@ def validate_size(img):
 
 def read_image (url):
     try:
-        img = io.imread(url).astype(np.uint8)
+        resp = requests.get(url)
+        img = Image.open(BytesIO(resp.content))
 
     except:
         raise ReadError()
+    
+    if img.mode == 'P' or img.mode == 'PA':
+        img = img.convert(mode='RGBA')
+
+    img = np.asarray(img).astype(np.uint8)
 
     if not validate_channel_count(img):
         raise ChannelCountError()
