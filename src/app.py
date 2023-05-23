@@ -69,6 +69,7 @@ def process():
         )
 
         bounds = get_bounds(traced_bitmaps)
+        
         cuid_str = upload_markup(markup, VECTORIZING_S3_BUCKET)
         app.logger.info(f'Generated objectId {cuid_str}')
         return jsonify({ 
