@@ -1,6 +1,7 @@
 flask
 opencv-python
 scikit-image
+scikit-learn
 pypotrace
 boto3
 cuid
@@ -8,3 +9,5 @@ gevent
 sentry-sdk
 Pillow
 requests
+pytest
+faiss-cpu

@@ -1,5 +1,3 @@
-import json
-import logging
 import os
 import sentry_sdk
 from s3 import upload_markup
@@ -11,88 +9,118 @@ from read import ReadError, ChannelCountError, SizeError
 from markup import build_markup
 from process_binary import process as process_binary, DEFAULTS as PROCESS_DEFAULTS
 from logging.config import dictConfig
-
-# Set up Flask logging to STDOUT
-dictConfig({
-    'version': 1,
-    'handlers': {'wsgi': {
-        'class': 'logging.StreamHandler',
-        'stream': 'ext://sys.stdout',
-    }},
-    'root': {
-        'level': 'INFO',
-        'handlers': ['wsgi']
-    }
-})
-
+from image_read import try_read_image_from_url
+import potrace
+from solvers.color_solver import solve
 
 (
     PORT, 
-    VECTORIZING_S3_BUCKET, 
+    S3_BUCKET, 
     AWS_ACCESS_KEY_ID, 
     AWS_SECRET_ACCESS_KEY,
 ) = check_environment_variables()
 
-app = Flask(__name__)
+def setup_logs():
+    # Set up Flask logging to STDOUT
+    dictConfig({
+        'version': 1,
+        'handlers': {'wsgi': {
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://sys.stdout',
+        }},
+        'root': {
+            'level': 'INFO',
+            'handlers': ['wsgi']
+        }
+    })
 
-@app.route('/', methods = ['POST'])
-def process():
+def create_app():
+    app = Flask(__name__)
 
-    content_type = request.headers['Content-Type']
-
-    if content_type == 'application/json':
+    @app.route('/', methods = ['POST'])
+    def process():
         args = request.json
-    else:
-        args = request.form
+
+        if not 'url' in args:
+            return jsonify({
+                "success": False,
+                "error": "INVALID_PARAMETERS"
+            }), 400
+
+        url = args.get('url')
         
-    if not 'url' in args:
+        img = try_read_image_from_url(url)
+        bitmaps, colors = solve(img, 12)
+
+        return build_markup(
+                    [potrace.Bitmap(bitmap).trace() for bitmap in bitmaps],
+                    colors,
+                    img.shape[1],
+                    img.shape[0]
+                )
+
+    @app.route('/health', methods = ['GET'])
+    def healthcheck():
         return jsonify({
-            "success": False,
-            "error": "INVALID_PARAMETERS"
-        }), 400
+                "success": True,
+            }), 200
 
-    url = args.get('url')
+    return app
+
+
+# def process():
+
+#     content_type = request.headers['Content-Type']
+
+#     if content_type == 'application/json':
+#         args = request.json
+#     else:
+#         args = request.form
+        
+#     if not 'url' in args:
+#         return jsonify({
+#             "success": False,
+#             "error": "INVALID_PARAMETERS"
+#         }), 400
+
+#     url = args.get('url')
     
-    thresholding_method = args.get(
-        'thresholding_method', 
-        PROCESS_DEFAULTS['thresholding_method']
-    )
+#     thresholding_method = args.get(
+#         'thresholding_method', 
+#         PROCESS_DEFAULTS['thresholding_method']
+#     )
 
-    try:
-        traced_bitmaps, colors, img_width, img_height = process_binary(url, thresholding_method)
+#     try:
+#         traced_bitmaps, colors, img_width, img_height = process_binary(url, thresholding_method)
 
-        markup = build_markup(
-            traced_bitmaps,
-            colors,
-            img_width,
-            img_height,
-        )
+#         markup = build_markup(
+#             traced_bitmaps,
+#             colors,
+#             img_width,
+#             img_height,
+#         )
 
-        bounds = get_bounds(traced_bitmaps)
-        cuid_str = upload_markup(markup, VECTORIZING_S3_BUCKET)
-        app.logger.info(f'Generated objectId {cuid_str}')
-        return jsonify({ 
-            'success': True,
-            'objectId': cuid_str, 
-            'info': {
-                'bounds': bounds,
-                'image_width': img_width,
-                'image_height': img_height
-            }
-        })
+#         bounds = get_bounds(traced_bitmaps)
+#         cuid_str = upload_markup(markup, S3_BUCKET)
+#         app.logger.info(f'Generated objectId {cuid_str}')
+#         return jsonify({ 
+#             'success': True,
+#             'objectId': cuid_str, 
+#             'info': {
+#                 'bounds': bounds,
+#                 'image_width': img_width,
+#                 'image_height': img_height
+#             }
+#         })
     
-    except (Exception) as e:
-        app.logger.error(e)
-        return jsonify({
-            "success": False,
-            "error": "INTERNAL_SERVER_ERROR"
-        }), 500
+#     except (Exception) as e:
+#         app.logger.error(e)
+#         return jsonify({
+#             "success": False,
+#             "error": "INTERNAL_SERVER_ERROR"
+#         }), 500
 
-@app.route('/health', methods = ['GET'])
-def healthcheck():
-    return jsonify({
-            "success": True,
-        }), 200
+app = create_app()
 
 if __name__ == '__main__':
     app.logger.info(f'Vectorizing server running on port: {PORT}')

@@ -3,7 +3,6 @@ from PIL import Image
 import requests
 from io import BytesIO
 
-
 CHANNEL_COUNT_ERROR = 'Image channel count not supported.'
 READ_ERROR = 'Failed to read image from provided URL.'
 SIZE_ERROR = 'Pixel counts over 1024^2 are not supported.'
@@ -59,7 +58,7 @@ def get_pixel_count (img):
     return width * height
 
 def validate_size(img):
-    return get_pixel_count(img) <= (2 ** 10) ** 2
+    return get_pixel_count(img) <= (2 ** 20) ** 2
 
 def read_image (url):
     try:

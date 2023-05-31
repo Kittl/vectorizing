@@ -2,10 +2,12 @@ import os
 
 REQUIRED_ENVIRONMENT_VARIABLES={
     'PORT': int,
-    'VECTORIZING_S3_BUCKET': str, 
-    'AWS_ACCESS_KEY_ID': str, 
+    'S3_BUCKET': str,
+    'AWS_ACCESS_KEY_ID': str,
     'AWS_SECRET_ACCESS_KEY': str
 }
+
+print(REQUIRED_ENVIRONMENT_VARIABLES)
 
 class VariableNotDefinedException(Exception):
     pass
