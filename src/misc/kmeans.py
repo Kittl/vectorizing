@@ -51,7 +51,7 @@ def optimal_kmeans(img, max_color_count, threshold = 0.85):
     optimal_k = None
 
     max_score = -np.inf
-    for k in range(2, max_color_count + 1):
+    for k in range(6, 7):
         labels, centers = k_means_cluster(img, k)
 
         score = quick_silhouette_score(

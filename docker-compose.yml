@@ -15,18 +15,13 @@ x-test: &test
     - testing
 services:
   web:
-    <<: *build
-    <<: *env
+    <<: [*build, *env, *test]
     command: python /app/src/app.py
     ports:
       - ${PORT}:${PORT}
   test:
-    <<: *build
-    <<: *env
-    <<: *test
+    <<: [*build, *env, *test]
     command: pytest /app/src/tests/main.py -s
   test-custom:
-    <<: *build
-    <<: *env
-    <<: *test
+    <<: [*build, *env, *test]
     command: pytest /app/src/tests/custom.py -s

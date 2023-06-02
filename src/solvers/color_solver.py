@@ -83,13 +83,23 @@ def remove_edge_artifacts(img, mapping, color_centers):
 
     return mapping - 1, color_centers
 
-def prepare_bitmaps(labels, centers):
-    bitmaps = [np.where(labels == center, 1, 0).astype(np.uint32) for center, _ in enumerate(centers)]
-    return bitmaps, centers
+def prepare_bitmaps(labels, colors):
+    bitmaps = []
+
+    for x in range(len(colors)):
+        # Bitmap of color {colors[x]}
+        bitmap = np.where(labels == x, 1, 0).astype(np.uint32)
+        for y in range(x + 1, len(colors)):
+            # Bitmap of color {colors[y]}
+            bitmap_y = np.where(labels == y, 1, 0).astype(np.uint32)
+            bitmap += bitmap_y
+        bitmaps.append(bitmap)
+
+    return bitmaps, colors
 
 def solve(img, options):
     img, options = validate_input(img, options)
-    opt_k, labels, centers = optimal_kmeans(cv2.bilateralFilter(img, 9, 75, 75), options.get('color_count'))
+    opt_k, labels, centers = optimal_kmeans(cv2.bilateralFilter(img, 13, 50, 50), options.get('color_count'))
     labels, centers = remove_edge_artifacts(img, labels, centers)
     bitmaps, centers = prepare_bitmaps(labels, centers)
     markup = build_markup(

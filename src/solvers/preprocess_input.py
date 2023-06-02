@@ -40,12 +40,6 @@ def perpare_image(img):
     resized = handle_size(img)
     return np.asarray(resized).astype(np.uint8)
 
-def validate_options(options):
-    color_count = options.get('color_count', None)
-    if (color_count is None) or color_count > MAX_COLOR_COUNT:
-        raise TooManyColorsError() 
-    return options
-
 
 def validate_input(img, options):
     return perpare_image(img), validate_options(options)
