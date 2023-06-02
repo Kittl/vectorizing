@@ -11,3 +11,4 @@ Pillow
 requests
 pytest
 faiss-cpu
+pyclipper
