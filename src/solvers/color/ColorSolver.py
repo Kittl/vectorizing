@@ -32,4 +32,4 @@ class ColorSolver:
     
 ColorSolver.MIN_COLOR_COUNT = 2
 ColorSolver.DEFAULT_COLOR_COUNT = 6
-ColorSolver.MAX_COLOR_COUNT = 16
+ColorSolver.MAX_COLOR_COUNT = 64

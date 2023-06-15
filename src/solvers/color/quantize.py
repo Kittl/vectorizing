@@ -4,8 +4,8 @@ from PIL import Image
 import scipy.ndimage as ndi
 from skimage.measure import label
 
-BILATERAL_FILTER_DIAMETER = 9
-BILATERAL_FILTER_SIGMA = 75
+BILATERAL_FILTER_DIAMETER = 7
+BILATERAL_FILTER_SIGMA = 50
 
 # Applies a strong bilateral filter to the image.
 # This greatly improves results for clip art.
