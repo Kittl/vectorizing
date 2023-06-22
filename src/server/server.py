@@ -48,12 +48,23 @@ def validate_args(args):
     solver = args.get('solver', DEFAULT_SOLVER)
     if not solver in SOLVERS:
         return False
+
+    box = args.get('crop_box')
+    if box:
+        if len(box) != 4:
+            return False
+
+        only_numbers = all([isinstance(item, int) or isinstance(item, float) for item in box])
+        if not only_numbers:
+            return False
     
+    box = [round(num) for num in box]
     return SimpleNamespace(
+        crop_box = box,
         solver = solver,
         url = args.get('url'),
         raw = args.get('raw'),
-        color_count = args.get('color_count')
+        color_count = args.get('color_count'),
     )
 
 def invalid_args():
@@ -78,6 +89,7 @@ def create_server():
         solver = args.solver
         color_count = args.color_count
         raw = args.raw
+        crop_box = args.crop_box
 
         try:
             timer = Timer()
@@ -85,6 +97,9 @@ def create_server():
             timer.start_timer('Image Reading')
             img = try_read_image_from_url(url)
             timer.end_timer()
+
+            if crop_box:
+                img = img.crop(tuple(crop_box))
     
             if solver == 0:
                 timer.start_timer('Binary Solver - Total')
