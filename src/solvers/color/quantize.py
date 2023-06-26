@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from PIL import Image
+from faiss import Kmeans
 import scipy.ndimage as ndi
 from skimage.measure import label
 
@@ -144,46 +145,57 @@ def write_background_cluster(labels, bg_cluster):
     labels = np.where(bg_cluster > 0, 0, labels)
     return labels
 
-def add_alpha_channel_to_colors(colors):
-    return [[r, g, b, 1] for r, g, b in colors]
+# Gets initial centroids for kmeans clustering
+# by quantizing an image using FASTOCTREE method
+def get_initial_centroids(img_arr, color_count):
+    img = Image.fromarray(img_arr)
 
-def add_background_color(colors, color):
-    return np.array([color] + colors)
+    img = img.quantize(
+        color_count, 
+        method = Image.Quantize.FASTOCTREE
+    ).convert('RGB')
 
-def quantize(img_arr, color_count):
-    channel_count = img_arr.shape[2]
+    img_arr = np.asarray(img)
+    channel_count = img_arr.shape[-1]
+
+    return np.unique(
+        np.reshape(img_arr, (-1, channel_count)),
+        axis = 0
+    ).astype(np.uint8)
+
+def kmeans(img_arr, init_centroids):
+    channel_count = img_arr.shape[-1]
+    data = np.reshape(img_arr, (-1, channel_count)).astype(np.float32)
+    init_centroids = init_centroids.astype(np.float32)
+    km = Kmeans(channel_count, init_centroids.shape[0], niter = 100)
+    km.train(data, init_centroids = init_centroids)
+    _, labels = km.index.search(data, 1)
+    return labels.astype(np.uint8), km.centroids.astype(np.uint8)
     
-    img_arr_original = img_arr
+def quantize(img_arr, color_count):
+    channel_count = img_arr.shape[-1]
+    
+    background_cluster = None
     if channel_count == 4:
+        background_cluster = get_background_cluster(img_arr)
         img = Image.fromarray(img_arr)
         img = img.convert('RGB')
         img_arr = np.asarray(img)
 
-    filtered_arr = bilateral_filter(img_arr)
-    filtered_img = Image.fromarray(filtered_arr)
+    img_arr = bilateral_filter(img_arr)
 
-    quantized_img = filtered_img.quantize(
-        color_count, 
-        kmeans = 1,
-        method = Image.Quantize.MEDIANCUT
-    ).convert('RGB')
-    
-    quantized_arr = np.asarray(quantized_img)
-
-    colors, labels = np.unique(
-        np.reshape(quantized_arr, (-1, 3)),
-        axis = 0,
-        return_inverse = True
+    labels, colors = kmeans(
+        img_arr,
+        get_initial_centroids(img_arr, color_count)
     )
-    labels = np.reshape(labels, img_arr.shape[:2]).astype(np.uint16)
 
-    if channel_count == 4:
-        bg_cluster = get_background_cluster(img_arr_original)
-        if bg_cluster is not None:
-            labels = write_background_cluster(labels, bg_cluster)
-            colors = add_alpha_channel_to_colors(colors)
-            colors = add_background_color(colors, [0, 0, 0, 0])
+    labels = np.reshape(labels, img_arr.shape[:-1])
+
+    if background_cluster is not None:
+        labels = write_background_cluster(labels, background_cluster)
+        colors = [[0, 0, 0, 0]] + [[r, g, b, 1] for r, g, b in colors]
+        colors = np.array(colors)
 
     colors = colors.astype(np.uint8)
-    labels, colors = enhance(filtered_arr, labels, colors)
+    labels, colors = enhance(img_arr, labels, colors)
     return labels, colors

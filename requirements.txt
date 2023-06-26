@@ -5,7 +5,9 @@ flask-cors
 gevent
 sentry-sdk
 
+numba
 Pillow
+faiss-cpu
 pyclipper
 pypotrace
 scikit-image

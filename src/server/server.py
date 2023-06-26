@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from gevent.pywsgi import WSGIServer
 from flask import Flask, request, jsonify
 
+from server.timer import Timer
 from server.logs import setup_logs
 from server.s3 import upload_markup
 from svg.markup import create_markup
@@ -16,7 +17,7 @@ from geometry.bounds import compound_path_list_bounds
 # 0 -> BinarySolver
 # 1 -> ColorSolver
 SOLVERS = [0, 1]
-DEFAULT_SOLVER = 1
+DEFAULT_SOLVER = 0
 
 (
     PORT, 
@@ -36,8 +37,8 @@ def process_binary(img):
     solver = BinarySolver(img)
     return solver.solve()
 
-def process_color(img, color_count):
-    solver = ColorSolver(img, color_count)
+def process_color(img, color_count, timer):
+    solver = ColorSolver(img, color_count, timer)
     return solver.solve()
 
 def validate_args(args):
@@ -79,22 +80,40 @@ def create_server():
         raw = args.raw
 
         try:
+            timer = Timer()
+
+            timer.start_timer('Image Reading')
             img = try_read_image_from_url(url)
+            timer.end_timer()
     
             if solver == 0:
+                timer.start_timer('Binary Solver - Total')
                 solved = process_binary(img)
+                timer.end_timer()
             
             else:
-                solved = process_color(img, color_count)
+                timer.start_timer('Color Solver - Total')
+                solved = process_color(img, color_count, timer)
+                timer.end_timer()
 
             compound_paths, colors, width, height = solved
+
+            timer.start_timer('Markup Creation')
             markup = create_markup(compound_paths, colors, width, height)
+            timer.end_timer()
 
             if raw:
                 return markup
 
+            timer.start_timer('Markup Upload')
             cuid_str = upload_markup(markup, S3_BUCKET)
+            timer.end_timer()
+
+            timer.start_timer('Bounds Creation')
             bounds = compound_path_list_bounds(compound_paths)
+            timer.end_timer()
+
+            server.logger.info(timer.timelog())
             
             return jsonify({ 
                 'success': True,

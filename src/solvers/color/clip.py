@@ -18,7 +18,7 @@ def remove_layering(traced_bitmaps):
         potrace_path_to_compound_path(traced) 
         for traced in traced_bitmaps
     ]
-    
+
     compound_polygons = [
         compound_path_to_compound_polygon(compound_path, SCALE) 
         for compound_path in compound_paths
