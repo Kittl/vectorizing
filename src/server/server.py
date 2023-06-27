@@ -131,6 +131,12 @@ def create_server():
                 "success": False,
                 "error": "INTERNAL_SERVER_ERROR"
             }), 500
+        
+    @server.route('/health', methods = ['GET'])
+    def healthcheck():
+        return jsonify({
+            "success": True,
+        }), 200
 
     return server    
     
