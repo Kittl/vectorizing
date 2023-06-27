@@ -191,11 +191,12 @@ def quantize(img_arr, color_count):
 
     labels = np.reshape(labels, img_arr.shape[:-1])
 
-    if background_cluster is not None:
+    has_background = background_cluster is not None
+    if has_background:
         labels = write_background_cluster(labels, background_cluster)
         colors = [[0, 0, 0, 0]] + [[r, g, b, 1] for r, g, b in colors]
         colors = np.array(colors)
 
     colors = colors.astype(np.uint8)
     labels, colors = enhance(img_arr, labels, colors)
-    return labels, colors
+    return labels, colors, has_background

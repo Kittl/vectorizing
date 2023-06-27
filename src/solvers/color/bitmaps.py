@@ -1,11 +1,15 @@
 import numpy as np
 
-def create_bitmaps(labels, colors):
+def create_bitmaps(labels, colors, has_background):
     
     bitmaps = [
         np.where(labels == label, 1, 0).astype(np.uint32) 
         for label in range(len(colors))
     ]
+
+    if has_background:
+        bitmaps = bitmaps[1 : len(bitmaps)]
+        colors = colors[1 : len(colors)]
 
     zipped = list(zip(bitmaps, colors))
     # Empty bitmaps should be ignored

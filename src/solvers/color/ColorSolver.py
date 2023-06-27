@@ -22,11 +22,11 @@ class ColorSolver:
 
     def solve(self):
         self.timer.start_timer('Quantization')
-        labels, colors = quantize(self.img_arr, self.color_count)
+        labels, colors, has_background = quantize(self.img_arr, self.color_count)
         self.timer.end_timer()
 
         self.timer.start_timer('Bitmap Creation')
-        bitmaps, colors = create_bitmaps(labels, colors)
+        bitmaps, colors = create_bitmaps(labels, colors, has_background)
         self.timer.end_timer()
 
         self.timer.start_timer('Bitmap Tracing')
