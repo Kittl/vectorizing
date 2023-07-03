@@ -54,11 +54,10 @@ def validate_args(args):
         if len(box) != 4:
             return False
 
-        only_numbers = all([isinstance(item, int) or isinstance(item, float) for item in box])
+        only_numbers = all([isinstance(item, int) for item in box])
         if not only_numbers:
             return False
     
-    box = [round(num) for num in box]
     return SimpleNamespace(
         crop_box = box,
         solver = solver,
