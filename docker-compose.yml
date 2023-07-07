@@ -1,11 +1,25 @@
 version: "3.9"
+x-build: &build
+  build: .
+x-env: &env
+  environment:
+    - PORT=${PORT}
+    - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+    - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    - S3_BUCKET=${S3_BUCKET}
+x-test: &test
+  volumes:
+    - ./test-results:/app/test-results
+  profiles:
+    - testing
+  environment:
+    -DEV_ENV=TRUE
 services:
   web:
-    build: .
-    environment:
-      - PORT=8000
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - VECTORIZING_S3_BUCKET=${VECTORIZING_S3_BUCKET}
+    <<: [*build, *env]
+    command: python /app/src/app.py
     ports:
-      - "8000:8000"
+      - ${PORT}:${PORT}
+  test:
+    <<: [*build, *env, *test]
+    command: pytest /app/src/test/test.py
