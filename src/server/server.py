@@ -18,6 +18,7 @@ from geometry.bounds import compound_path_list_bounds
 # 1 -> ColorSolver
 SOLVERS = [0, 1]
 DEFAULT_SOLVER = 0
+PYTHON_ENV = os.getenv("PYTHON_ENV", "development")
 
 (
     PORT, 
@@ -28,7 +29,6 @@ DEFAULT_SOLVER = 0
 
 (
     SENTRY_DSN,
-    DEV_ENV
 ) = get_optional()
 
 setup_logs()
@@ -64,7 +64,7 @@ def invalid_args():
     
 def create_server():
     server = Flask(__name__)
-    server.debug = DEV_ENV
+    server.debug = PYTHON_ENV == 'development'
 
     @server.route('/', methods = ['POST'])
     def index():
@@ -137,17 +137,22 @@ def create_server():
         return jsonify({
             "success": True,
         }), 200
-
+    
+    @server.route('/test-error', methods = ['GET'])
+    def test_error():
+        raise Exception('Test Error')
+    
     return server    
     
 def serve_forever():
     server = create_server()
-    server.logger.info(f'Vectorizing server running on port: {PORT}')
+    server.logger.info(f'Vectorizing server running on port: {PORT}, environment: {PYTHON_ENV}')
     
     if SENTRY_DSN:
         sentry_sdk.init(
             dsn = SENTRY_DSN,
-            traces_sample_rate = 0.1
+            traces_sample_rate = 0.1,
+            environment = PYTHON_ENV,
         )
     
     http_server = WSGIServer(('0.0.0.0', PORT), server)

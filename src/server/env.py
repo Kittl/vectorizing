@@ -9,7 +9,6 @@ REQUIRED_ENVIRONMENT_VARIABLES = {
 
 OPTIONAL_ENVIRONMENT_VARIABLES = {
     'SENTRY_DSN': str,
-    'DEV_ENV': bool,
 }
 
 class VariableNotDefinedException(Exception):
