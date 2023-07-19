@@ -93,6 +93,8 @@ def create_server():
         try:
             timer = Timer()
 
+            timer.start_timer('Total')
+
             timer.start_timer('Image Reading')
             img = try_read_image_from_url(url)
             timer.end_timer()
@@ -126,6 +128,8 @@ def create_server():
             timer.start_timer('Bounds Creation')
             bounds = compound_path_list_bounds(compound_paths)
             timer.end_timer()
+
+            timer.end_timer() # Total
 
             server.logger.info(timer.timelog())
             
