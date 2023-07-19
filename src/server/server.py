@@ -18,6 +18,7 @@ from geometry.bounds import compound_path_list_bounds
 # 1 -> ColorSolver
 SOLVERS = [0, 1]
 DEFAULT_SOLVER = 0
+PYTHON_ENV = os.getenv("PYTHON_ENV", "development")
 
 (
     PORT, 
@@ -28,7 +29,6 @@ DEFAULT_SOLVER = 0
 
 (
     SENTRY_DSN,
-    DEV_ENV
 ) = get_optional()
 
 setup_logs()
@@ -48,12 +48,22 @@ def validate_args(args):
     solver = args.get('solver', DEFAULT_SOLVER)
     if not solver in SOLVERS:
         return False
+
+    box = args.get('crop_box')
+    if box:
+        if len(box) != 4:
+            return False
+
+        only_numbers = all([isinstance(item, int) for item in box])
+        if not only_numbers:
+            return False
     
     return SimpleNamespace(
+        crop_box = box,
         solver = solver,
         url = args.get('url'),
         raw = args.get('raw'),
-        color_count = args.get('color_count')
+        color_count = args.get('color_count'),
     )
 
 def invalid_args():
@@ -64,7 +74,7 @@ def invalid_args():
     
 def create_server():
     server = Flask(__name__)
-    server.debug = DEV_ENV
+    server.debug = PYTHON_ENV == 'development'
 
     @server.route('/', methods = ['POST'])
     def index():
@@ -78,6 +88,7 @@ def create_server():
         solver = args.solver
         color_count = args.color_count
         raw = args.raw
+        crop_box = args.crop_box
 
         try:
             timer = Timer()
@@ -85,6 +96,9 @@ def create_server():
             timer.start_timer('Image Reading')
             img = try_read_image_from_url(url)
             timer.end_timer()
+
+            if crop_box:
+                img = img.crop(tuple(crop_box))
     
             if solver == 0:
                 timer.start_timer('Binary Solver - Total')
@@ -137,17 +151,22 @@ def create_server():
         return jsonify({
             "success": True,
         }), 200
-
+    
+    @server.route('/test-error', methods = ['GET'])
+    def test_error():
+        raise Exception('Test Error')
+    
     return server    
     
 def serve_forever():
     server = create_server()
-    server.logger.info(f'Vectorizing server running on port: {PORT}')
+    server.logger.info(f'Vectorizing server running on port: {PORT}, environment: {PYTHON_ENV}')
     
     if SENTRY_DSN:
         sentry_sdk.init(
             dsn = SENTRY_DSN,
-            traces_sample_rate = 0.1
+            traces_sample_rate = 0.1,
+            environment = PYTHON_ENV,
         )
     
     http_server = WSGIServer(('0.0.0.0', PORT), server)
