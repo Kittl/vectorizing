@@ -11,6 +11,9 @@ def create_markup(compound_paths, colors, width, height):
     paths_markup = []
 
     for compound_path, color in zip(compound_paths, colors):
+        if not len(compound_path):
+            continue
+
         d = ''.join([draw_geo(geo, i == 0) for path in compound_path for i, geo in enumerate(path)]) + 'Z'
         path_markup = f'<path d="{d}" fill="{to_SVG_color(color)}" />'
         paths_markup.append(path_markup)
