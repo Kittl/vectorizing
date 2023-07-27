@@ -48,5 +48,6 @@ def compound_path_list_bounds(compound_path_list):
     bounds = [
         compound_path_bounds(compound_path) 
         for compound_path in compound_path_list
+        if len(compound_path) > 0
     ]
     return compute_total_bounds(bounds)
