@@ -25,7 +25,6 @@ jobs:
       - name: Publish the Docker image
         run: |
           docker build . --tag ghcr.io/kittl/vectorizing:${{ github.ref_name }}
-          docker run ghcr.io/kittl/vectorizing:${{ github.ref_name }}
           docker push ghcr.io/kittl/vectorizing:${{ github.ref_name }}
       - name: Deploy vectorizing in staging cluster
         uses: kodermax/kubectl-aws-eks@master
