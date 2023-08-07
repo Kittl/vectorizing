@@ -1,10 +1,10 @@
 import potrace
 import numpy as np
 
-from util.limit_size import limit_size
-from solvers.color.quantize import quantize
-from solvers.color.clip import remove_layering
-from solvers.color.bitmaps import create_bitmaps
+from vectorizing.util.limit_size import limit_size
+from vectorizing.solvers.color.quantize import quantize
+from vectorizing.solvers.color.clip import remove_layering
+from vectorizing.solvers.color.bitmaps import create_bitmaps
 
 class ColorSolver:
     def __init__(self, img, color_count, timer):

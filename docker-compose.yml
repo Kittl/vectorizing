@@ -16,7 +16,6 @@ x-test: &test
 services:
   web:
     <<: [*build, *env]
-    command: python /app/src/app.py
     ports:
       - ${PORT}:${PORT}
   test:

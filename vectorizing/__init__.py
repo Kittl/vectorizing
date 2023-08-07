@@ -1,18 +1,17 @@
 import os
 import sentry_sdk
 from types import SimpleNamespace
-from gevent.pywsgi import WSGIServer
 from flask import Flask, request, jsonify
 
-from server.timer import Timer
-from server.logs import setup_logs
-from server.s3 import upload_markup
-from svg.markup import create_markup
-from util.read import try_read_image_from_url
-from server.env import get_required, get_optional
-from solvers.color.ColorSolver import ColorSolver
-from solvers.binary.BinarySolver import BinarySolver
-from geometry.bounds import compound_path_list_bounds
+from vectorizing.server.timer import Timer
+from vectorizing.server.logs import setup_logs
+from vectorizing.server.s3 import upload_markup
+from vectorizing.svg.markup import create_markup
+from vectorizing.util.read import try_read_image_from_url
+from vectorizing.server.env import get_required, get_optional
+from vectorizing.solvers.color.ColorSolver import ColorSolver
+from vectorizing.solvers.binary.BinarySolver import BinarySolver
+from vectorizing.geometry.bounds import compound_path_list_bounds
 
 # 0 -> BinarySolver
 # 1 -> ColorSolver
@@ -72,11 +71,11 @@ def invalid_args():
         "error": "INVALID_PARAMETERS"
     }), 400
     
-def create_server():
-    server = Flask(__name__)
-    server.debug = PYTHON_ENV == 'development'
+def create_app(test_config=None):
+    app = Flask(__name__, instance_relative_config=True)
+    app.debug = PYTHON_ENV == 'development'
 
-    @server.route('/', methods = ['POST'])
+    @app.route('/', methods = ['POST'])
     def index():
         args = request.json
         
@@ -127,7 +126,7 @@ def create_server():
             bounds = compound_path_list_bounds(compound_paths)
             timer.end_timer()
 
-            server.logger.info(timer.timelog())
+            app.logger.info(timer.timelog())
             
             return jsonify({ 
                 'success': True,
@@ -140,34 +139,27 @@ def create_server():
             })
         
         except (Exception) as e:
-            server.logger.error(e)
+            app.logger.error(e)
             return jsonify({
                 "success": False,
                 "error": "INTERNAL_SERVER_ERROR"
             }), 500
         
-    @server.route('/health', methods = ['GET'])
+    @app.route('/health', methods = ['GET'])
     def healthcheck():
         return jsonify({
             "success": True,
         }), 200
     
-    @server.route('/test-error', methods = ['GET'])
+    @app.route('/test-error', methods = ['GET'])
     def test_error():
         raise Exception('Test Error')
     
-    return server    
-    
-def serve_forever():
-    server = create_server()
-    server.logger.info(f'Vectorizing server running on port: {PORT}, environment: {PYTHON_ENV}')
-    
+    app.logger.info(f'Vectorizing server running on port: {PORT}, environment: {PYTHON_ENV}')
     if SENTRY_DSN:
         sentry_sdk.init(
             dsn = SENTRY_DSN,
             traces_sample_rate = 0.1,
             environment = PYTHON_ENV,
         )
-    
-    http_server = WSGIServer(('0.0.0.0', PORT), server)
-    http_server.serve_forever()
+    return app

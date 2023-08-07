@@ -5,3 +5,11 @@ __pycache__
 venv
 test-images
 test-results
+.venv/
+*.pyc
+instance/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/

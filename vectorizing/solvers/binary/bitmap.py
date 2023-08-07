@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from solvers.binary.threshold import threshold
+from vectorizing.solvers.binary.threshold import threshold
 
 # Inverts an image
 def invert(img_arr):

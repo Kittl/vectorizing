@@ -1,4 +1,4 @@
-from svg.draw import draw_geo
+from vectorizing.svg.draw import draw_geo
 
 # Converts a color to a valid svg color value
 def to_SVG_color(color):

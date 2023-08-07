@@ -1,7 +1,7 @@
 import numpy as np
 
-from geometry.segment_list import SegmentList
-from geometry.cubic_bezier import CubicBezier
+from vectorizing.geometry.segment_list import SegmentList
+from vectorizing.geometry.cubic_bezier import CubicBezier
 
 # Given a potrace path, it constructs a compound path
 # using SegmentList and CubicBezier
