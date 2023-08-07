@@ -2,9 +2,7 @@ cuid
 boto3
 flask
 flask-cors
-gevent
 sentry-sdk
-
 numba
 Pillow
 faiss-cpu
@@ -12,6 +10,6 @@ pyclipper
 pypotrace
 scikit-image
 opencv-python
-
 pytest
 requests
+gunicorn

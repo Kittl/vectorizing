@@ -1,9 +1,9 @@
 import os
 
-from util.read import try_read_image_from_path
-from solvers.color.ColorSolver import ColorSolver
-from solvers.binary.BinarySolver import BinarySolver
-from svg.markup import create_markup
+from vectorizing.util.read import try_read_image_from_path
+from vectorizing.solvers.color.ColorSolver import ColorSolver
+from vectorizing.solvers.binary.BinarySolver import BinarySolver
+from vectorizing.svg.markup import create_markup
 
 # File meant for primitive manual testing.
 # Images in the test-images directory are processed.
