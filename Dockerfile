@@ -6,4 +6,4 @@ WORKDIR /
 COPY requirements.txt /
 RUN pip install -r requirements.txt
 COPY . /
-CMD gunicorn -w 4 'vectorizing:create_app()' --timeout 0 -b 0.0.0.0:$PORT --log-level debug
+CMD gunicorn -w 4 'vectorizing:create_app()' --timeout 0 -b 0.0.0.0:$PORT
