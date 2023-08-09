@@ -1,5 +1,5 @@
-from geometry.cubic_bezier import CubicBezier
-from geometry.segment_list import SegmentList
+from vectorizing.geometry.cubic_bezier import CubicBezier
+from vectorizing.geometry.segment_list import SegmentList
 
 # Truncates a number to 2 decimal places
 def truncate(number):

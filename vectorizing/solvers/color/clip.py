@@ -1,6 +1,6 @@
 import pyclipper
 
-from geometry.potrace import (
+from vectorizing.geometry.potrace import (
     potrace_path_to_compound_path,
     compound_path_to_compound_polygon,
     compound_polygon_to_compound_path

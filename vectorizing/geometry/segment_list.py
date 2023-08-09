@@ -1,5 +1,5 @@
 import numpy as np
-from geometry.bounds import Bounds
+from vectorizing.geometry.bounds import Bounds
 
 # Class to represent a list of segments
 # IMPORTANT: points should be an ndarray, and not a python list

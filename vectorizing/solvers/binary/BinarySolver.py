@@ -1,9 +1,9 @@
 import potrace
 import numpy as np
 
-from solvers.binary.bitmap import make_bitmap
-from geometry.potrace import potrace_path_to_compound_path
-from util.limit_size import limit_size
+from vectorizing.solvers.binary.bitmap import make_bitmap
+from vectorizing.geometry.potrace import potrace_path_to_compound_path
+from vectorizing.util.limit_size import limit_size
 
 class BinarySolver:
     def __init__(self, img):
