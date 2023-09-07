@@ -2,6 +2,29 @@
 
 Utility to vectorize raster images :rocket:
 
+## Local development
+
+1. Install system dependencies for pypotrace:
+
+	```bash
+	sudo apt-get update
+	sudo apt-get install build-essential python-dev libagg-dev libpotrace-dev pkg-config
+	```
+
+2. Create the conda development environment and activate it
+
+	```bash
+	conda env create -n dev -f envs/dev.yaml
+	conda activate dev
+	```
+
+3. If you want to add or remove dependencies, add / remove the corresponding package from either [`requirements/prod.in`](requirements/prod.in) or [`requirements/dev.in`](requirements/dev.in). Then run, from the root of the repo:
+
+	```bash
+	bash scripts/compile_requirements.sh
+	bash scripts/compile_envs.sh
+	```
+
 ## Usage
 
 -  `docker compose up --build` to start the server.
