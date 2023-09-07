@@ -8,7 +8,7 @@ Utility to vectorize raster images :rocket:
 	- Open this repository in the dev container:
 		- Install [`dev container`](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension in vscode
 		- In vscode press `cmd+shift+p` and search for the command: `Open folder in container`
-		- The dev container has already installed all necessary tools: conda, black, flake8, pre-commit, AWS CLI, Act
+		- The dev container has already installed all necessary tools: `conda`, `black`, `flake8`, `pre-commit`, `AWS CLI`, `Act`
 	- Install manually:
 		- [Conda](https://docs.conda.io/projects/miniconda/en/latest/miniconda-install.html)
 
