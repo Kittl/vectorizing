@@ -4,21 +4,29 @@ Utility to vectorize raster images :rocket:
 
 ## Local development
 
-1. Install system dependencies for pypotrace:
+1. Install python development tools:
+	- Open this repository in the dev container:
+		- Install [`dev container`](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension in vscode
+		- In vscode press `cmd+shift+p` and search for the command: `Open folder in container`
+		- The dev container has already installed all necessary tools: conda, black, flake8, pre-commit, AWS CLI, Act
+	- Install manually:
+		- [Conda](https://docs.conda.io/projects/miniconda/en/latest/miniconda-install.html)
+
+2. Install system dependencies for pypotrace:
 
 	```bash
 	sudo apt-get update
 	sudo apt-get install build-essential python-dev libagg-dev libpotrace-dev pkg-config
 	```
 
-2. Create the conda development environment and activate it
+3. Create the conda development environment and activate it
 
 	```bash
 	conda env create -n dev -f envs/dev.yaml
 	conda activate dev
 	```
 
-3. If you want to add or remove dependencies, add / remove the corresponding package from either [`requirements/prod.in`](requirements/prod.in) or [`requirements/dev.in`](requirements/dev.in). Then run, from the root of the repo:
+4. If you want to add or remove dependencies, add / remove the corresponding package from either [`requirements/prod.in`](requirements/prod.in) or [`requirements/dev.in`](requirements/dev.in). Then run, from the root of the repo:
 
 	```bash
 	bash scripts/compile_requirements.sh
