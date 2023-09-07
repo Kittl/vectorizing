@@ -11,6 +11,6 @@ faiss-cpu~=1.7.4
 pyclipper~=1.3.0.post4
 pypotrace~=0.3
 scikit-image~=0.21.0
-opencv-python~=4.8.0.76
+opencv-python-headless~=4.8.0.76
 requests~=2.31.0
 gunicorn~=21.2.0

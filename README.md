@@ -18,11 +18,11 @@ Utility to vectorize raster images :rocket:
 	exit
 	```
 
-3. Open a terminal, and install system dependencies for `pypotrace` and `opencv`:
+3. Open a terminal, and install system dependencies for `pypotrace`:
 
 	```bash
 	sudo apt-get update
-	sudo apt-get install build-essential python-dev libagg-dev libpotrace-dev pkg-config ffmpeg libsm6 libxext6
+	sudo apt-get install build-essential python-dev libagg-dev libpotrace-dev pkg-config
 	```
 
 4. Create the conda development environment and activate it
