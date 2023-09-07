@@ -6,30 +6,33 @@ Utility to vectorize raster images :rocket:
 
 ## Local development
 
-1. Install python development tools:
-	- Open this repository in the dev container:
-		- Install [`dev container`](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension in vscode
-		- At the top of the repo click the `Open in dev container` badge, or:
-			- In vscode press `cmd+shift+p` and search for the command: `Open folder in container`
-			- The dev container has already installed all necessary tools: `conda`, `black`, `flake8`, `pre-commit`, `AWS CLI`, `Act`
-	- Install manually:
-		- [Conda](https://docs.conda.io/projects/miniconda/en/latest/miniconda-install.html)
+1. Open this repository in the dev container:
+	1. Install [`dev container`](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension in vscode
+	2. At the top of the repo click the `Open in dev container` badge, or, in vscode press `cmd+shift+p` and search for the command: `Open folder in container`
+	3. The dev container has already installed all necessary tools: `conda`, `black`, `flake8`, `pre-commit`, `AWS CLI`, `Act`
 
-2. Install system dependencies for `pypotrace`:
+2. If it's the first time running the container, initalize conda:
+
+	```bash
+	conda init
+	exit
+	```
+
+3. Open a terminal, and install system dependencies for `pypotrace` and `opencv`:
 
 	```bash
 	sudo apt-get update
-	sudo apt-get install build-essential python-dev libagg-dev libpotrace-dev pkg-config
+	sudo apt-get install build-essential python-dev libagg-dev libpotrace-dev pkg-config ffmpeg libsm6 libxext6
 	```
 
-3. Create the conda development environment and activate it
+4. Create the conda development environment and activate it
 
 	```bash
 	conda env create -n dev -f envs/dev.yaml
 	conda activate dev
 	```
 
-4. If you want to add or remove dependencies, add / remove the corresponding package from either [`requirements/prod.in`](requirements/prod.in) or [`requirements/dev.in`](requirements/dev.in). Then run, from the root of the repo:
+5. If you want to add or remove dependencies, add / remove the corresponding package from either [`requirements/prod.in`](requirements/prod.in) or [`requirements/dev.in`](requirements/dev.in). Then run, from the root of the repo:
 
 	```bash
 	bash scripts/compile_requirements.sh
