@@ -1,0 +1,5 @@
+{
+  "image": "public.ecr.aws/s0f8z6e9/devcontainer:ml-base.latest",
+  "postCreateCommand": "bash .devcontainer/scripts/post_create.sh",
+  "postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}"
+}
