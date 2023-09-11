@@ -1,36 +1,29 @@
-import os
+from vectorizing.test.config import TESTS
+from vectorizing.test.misc import get_image_url
+import sys
 
-from vectorizing.util.read import try_read_image_from_path
-from vectorizing.solvers.color.ColorSolver import ColorSolver
-from vectorizing.solvers.binary.BinarySolver import BinarySolver
-from vectorizing.svg.markup import create_markup
+import pytest
+from vectorizing import create_app
 
-# File meant for primitive manual testing.
-# Images in the test-images directory are processed.
-# The results are placed in test-results.
+app = create_app()
+app.config.update({ "TESTING": True })
 
-NUM_COLORS = 6
-formats = ['jpg', 'jpeg', 'png']
+def test():
+    print(TESTS.items(), file = sys.stderr)
+    for image_name, request_params_list in TESTS.items():
+        for request_params in request_params_list:
+            image_test(image_name, request_params)
+    assert False
 
-def process_test_images_dir(dirname):
-    results = []
-
-    for image_name in os.listdir(dirname):
-        matches = [image_name.endswith(format) for format in formats]
-        if any(matches):
-            image_path = os.path.join(dirname, image_name)
-            img = try_read_image_from_path(image_path)
-            res = ColorSolver(img, NUM_COLORS).solve()
-            results.append([res, os.path.splitext(image_name)[0]])
-    
-    return results
-
-def write_results(results, dirname):
-    for res, image_name in results:
-        compound_paths, colors, width, height = res
-        f = open(os.path.join(dirname, f'{image_name}.svg'), 'w')
-        f.write(create_markup(compound_paths, colors, width, height))
-        f.close()
-
-results = process_test_images_dir('test-images')
-write_results(results, 'test-results')
+def image_test(image_name, request_params):
+    image_url = get_image_url(image_name)
+    print('URL =========================', file = sys.stderr)
+    print(image_url, file=sys.stderr)
+    request_params = {
+        'url': image_url,
+        'solver': request_params.get('solver'),
+        'color_count': request_params.get('color_count'),
+        'raw': True
+    }
+    response = app.test_client().post('/', json = request_params).data
+    print(response, file = sys.stderr)

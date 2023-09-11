@@ -28,6 +28,7 @@ PYTHON_ENV = os.getenv("PYTHON_ENV", "development")
 
 (
     SENTRY_DSN,
+    S3_TEST_BUCKET
 ) = get_optional()
 
 setup_logs()
