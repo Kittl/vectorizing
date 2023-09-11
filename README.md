@@ -30,14 +30,6 @@ The first time the execution can take few minutes, as it is pulling the dev cont
 
 This will compile dependencies and environments, ensuring a consistent development workflow and deployment.
 
-## Usage
-
--  `docker compose up --build` to start the server.
-
--  `docker compose run --build test` to run manual tests.
-
-Manual tests are just visual tests. Images located in `test-images` are processed by the solver(s) and the results placed in `test-results`. This is probably temporary until we set up unit tests.
-
 ## Server
 
 The server has a single endpoint (/) that receives `POST` requests.

@@ -3,8 +3,6 @@ __pycache__
 .DS_Store
 .env
 venv
-test-images
-test-results
 .venv/
 *.pyc
 instance/
@@ -13,3 +11,4 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+diff_output
