@@ -2,7 +2,7 @@ import math
 from PIL import Image
 
 # Size restrictions for image
-MIN_PIXEL_COUNT = 8
+MIN_PIXEL_COUNT = 64
 MAX_PIXEL_COUNT = 1024 ** 2
 
 def resize_to_target(img, target_pixel_count):

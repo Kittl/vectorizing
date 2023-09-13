@@ -8,6 +8,11 @@ from vectorizing.tests.config import TESTS
 from vectorizing.tests.testutil import get_markup, compute_img_difference, write_img_difference, RESULTS_FOLDER_PATH, MAX_IMAGE_DIFFERENCE, TMP_FOLDER_PATH
 
 def test(client):
+    """
+    Tests all images inside /images directory using the TESTS object
+    in config.py
+    """
+
     results_path = Path(RESULTS_FOLDER_PATH)
     
     # Create results folder if non-existent
@@ -19,7 +24,8 @@ def test(client):
 
     for img_name, options_list in TESTS.items():
         for options in options_list:
-            output_name = options.get('id') + '.png'
+            id = options.get('id')
+            output_name = f'{id}.png'
             
             # Vectorized SVG markup
             markup = get_markup(client, img_name, options)
@@ -40,6 +46,7 @@ def test(client):
                     RESULTS_FOLDER_PATH / output_name
                 )
 
+                # Write image difference to diff_output
                 if difference >= MAX_IMAGE_DIFFERENCE:
                     write_img_difference(
                         img, 
