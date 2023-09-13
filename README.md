@@ -47,6 +47,7 @@ The request format is the following:
 A typical response would be
 
 ```typescript
+{
 	success: boolean, // Whether the request was successful
 	objectId: string, // The object id in the S3 bucket
 		info: {
@@ -68,9 +69,6 @@ Or, if `raw = true` was supplied, just plain SVG markup
 
 ## Testing
 
-### Required setup
-If needed, update the `S3_TEST_BUCKET` environment variable in your `.env` file. You should have read + write access to it.
-
 Tests work on rasterized versions of vectorized markup. i.e
 1. Images are vectorized
 2. SVG markup is then rasterized
@@ -84,6 +82,9 @@ To run tests, you can run
 ```
 python -m pytest vectorizing/tests/test.py
 ```
+
+### Required setup
+If needed, update the `S3_TEST_BUCKET` environment variable in your `.env` file. You should have read + write access to it.
 
 ### Adding new tests
 To add a new test:
