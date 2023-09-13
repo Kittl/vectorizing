@@ -24,8 +24,8 @@ dependencies:
   - zlib=1.2.13=h5eee18b_0
   - pip:
       - blinker==1.6.2
-      - boto3==1.28.42
-      - botocore==1.31.42
+      - boto3==1.28.45
+      - botocore==1.31.45
       - certifi==2023.7.22
       - charset-normalizer==3.2.0
       - click==8.1.7
