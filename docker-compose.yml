@@ -20,6 +20,3 @@ services:
     command: gunicorn -w 4 'vectorizing:create_app()' --timeout 0 -b 0.0.0.0:$PORT --log-level debug
     ports:
       - ${PORT}:${PORT}
-  test:
-    <<: [*build, *env, *test]
-    command: pytest /app/src/test/test.py

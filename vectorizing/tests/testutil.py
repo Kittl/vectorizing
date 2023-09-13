@@ -9,8 +9,6 @@ from vectorizing.util.read import try_read_image_from_path
 from vectorizing.server.s3 import get_object_url, upload_file
 from vectorizing.solvers.binary.bitmap import alpha_blend
 
-import sys
-
 (_, S3_TEST_BUCKET) = get_optional()
 
 MAX_IMAGE_DIFFERENCE = 0.01
@@ -103,7 +101,6 @@ def compute_img_difference(
 
     (height, width, _) = img_arr.shape
     px_count = width * height
-    print(px_count, file =sys.stderr)
     if px_count <= MIN_UQI_PIXEL_COUNT:
         # For very small images, uqi sometimes returns nan
 
@@ -119,8 +116,6 @@ def compute_img_difference(
         # Amount of differing pixels
         diff_count = np.sum(diff_labels)
 
-        print(diff_count, file = sys.stderr)
-
         if diff_count < small_image_test_factor * px_count:
             return 0
         return 1
@@ -129,8 +124,6 @@ def compute_img_difference(
         img_arr,
         expected_img_arr,
     )
-
-    print(image_quality_index, file =sys.stderr)
 
     return 1 - image_quality_index
 
