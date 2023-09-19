@@ -9,6 +9,7 @@ REQUIRED_ENVIRONMENT_VARIABLES = {
 
 OPTIONAL_ENVIRONMENT_VARIABLES = {
     'SENTRY_DSN': str,
+    'S3_TEST_BUCKET': str
 }
 
 class VariableNotDefinedException(Exception):
