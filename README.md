@@ -28,7 +28,7 @@ The first time the execution can take few minutes, as it is pulling the dev cont
 	bash scripts/compile_envs.sh
 	```
 
-This will compile dependencies and environments, ensuring a consistent development workflow and deployment.
+	This will compile dependencies and environments, ensuring a consistent development workflow and deployment.
 
 4. If you want to add or remove **system** dependencies, update the script: [`scripts/install_system_dependencies.sh`](scripts/install_system_dependencies.sh). This is used both in CI and at dev container creation, to keep them consistent.
 
