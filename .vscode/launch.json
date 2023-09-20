@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Vectorizing",
+            "type": "python",
+            "request": "launch",
+            "module": "flask",
+            "python": "/opt/conda/envs/dev/bin/python",
+            "env": {
+                "FLASK_APP": "vectorizing",
+                "FLASK_DEBUG": "1",
+            },
+            "args": [
+                "run",
+                "--port",
+                "8080",
+                "--no-debugger", 
+            ],
+            "justMyCode": true
+        },
+    ]
+}
+

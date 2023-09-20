@@ -2,7 +2,9 @@
 -r prod.txt
 
 # add development requirements
-python-dotenv~=1.0.0
+pytest-dotenv~=0.5.2
 pre-commit
 pip-tools
 pytest
+cairosvg~=2.7.1
+sewar~=0.4.6

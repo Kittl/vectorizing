@@ -7,6 +7,7 @@ x-env: &env
     - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
     - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     - S3_BUCKET=${S3_BUCKET}
+    - S3_TEST_BUCKET=${S3_TEST_BUCKET}
     - SENTRY_DSN=${SENTRY_DSN}
 x-test: &test
   volumes:
@@ -19,6 +20,3 @@ services:
     command: gunicorn -w 4 'vectorizing:create_app()' --timeout 0 -b 0.0.0.0:$PORT --log-level debug
     ports:
       - ${PORT}:${PORT}
-  test:
-    <<: [*build, *env, *test]
-    command: pytest /app/src/test/test.py
