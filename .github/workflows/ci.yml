@@ -18,6 +18,10 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.11
+      - name: Set up system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python-dev libagg-dev libpotrace-dev pkg-config libffi-dev libcairo2-dev
       - name: Set up `dev` conda environment
         uses: conda-incubator/setup-miniconda@v2
         with:
