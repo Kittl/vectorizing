@@ -29,7 +29,8 @@ jobs:
           environment-file: envs/dev.yaml
           auto-activate-base: false
       - name: Run tests
-        shell: bash
+        shell: bash -el {0}
         run: |
+          conda info
           conda activate dev
           python -m pytest vectorizing/tests/test.py
