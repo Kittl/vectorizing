@@ -37,6 +37,5 @@ jobs:
       - name: Run tests
         shell: bash -el {0}
         run: |
-          conda info
           conda activate dev
           python -m pytest vectorizing/tests/test.py
