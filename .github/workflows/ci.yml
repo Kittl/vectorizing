@@ -23,12 +23,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential libagg-dev libpotrace-dev pkg-config libffi-dev libcairo2-dev
       - name: Set up `dev` conda environment
+        shell: bash
         uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: dev
           environment-file: envs/dev.yaml
           auto-activate-base: false
       - name: Run tests
+        shell: bash
         run: |
           conda activate dev
           python -m pytest vectorizing/tests/test.py
