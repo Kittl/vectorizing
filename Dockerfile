@@ -1,4 +1,4 @@
-FROM python:3.9
+FROM python:3.11
 RUN apt-get update -y
 RUN apt-get install wget build-essential python3-dev libagg-dev libpotrace-dev pkg-config libgl1 -y
 
