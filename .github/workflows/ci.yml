@@ -1,0 +1,40 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    env:
+      PORT: "8000"
+      S3_BUCKET: "-"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      S3_TEST_BUCKET: ${{ secrets.S3_TEST_BUCKET }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+      - name: Configure AWS credentials                          
+        uses: aws-actions/configure-aws-credentials@v1           
+        with:                                                    
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}        
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.11
+      - name: Set up system dependencies
+        run: |
+          bash scripts/install_system_dependencies.sh
+      - name: Set up `dev` conda environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: dev
+          environment-file: envs/dev.yaml
+          auto-activate-base: false
+      - name: Run tests
+        shell: bash -el {0}
+        run: |
+          conda activate dev
+          python -m pytest vectorizing/tests/test.py
