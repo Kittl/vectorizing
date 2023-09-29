@@ -40,6 +40,9 @@ To perform linting and formatting, run from the root of the repo:
 pre-commit run --all-files
 ```
 
+The first execution might take a bit longer, as it will set up the virtual environment
+where the linter and the formatter will run.
+
 ## Server
 
 The server has a single endpoint that receives `POST` requests.
