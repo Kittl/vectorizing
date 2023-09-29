@@ -3,6 +3,7 @@ on: push
 
 jobs:
   lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -12,7 +13,7 @@ jobs:
       - uses: pre-commit/action@v3.0.0
 
   test:
-    name: CI
+    name: Test
     runs-on: ubuntu-latest
     env:
       PORT: "8000"
