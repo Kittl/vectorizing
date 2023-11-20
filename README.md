@@ -32,6 +32,17 @@ The first time the execution can take few minutes, as it is pulling the dev cont
 
 4. If you want to add or remove **system** dependencies, update the script: [`scripts/install_system_dependencies.sh`](scripts/install_system_dependencies.sh). This is used both in CI and at dev container creation, to keep them consistent.
 
+## Linting and formatting
+
+To perform linting and formatting, run from the root of the repo:
+
+```
+pre-commit run --all-files
+```
+
+The first execution might take a bit longer, as it will set up the virtual environment
+where the linter and the formatter will run.
+
 ## Server
 
 The server has a single endpoint that receives `POST` requests.

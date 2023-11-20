@@ -9,3 +9,6 @@ bash "$SCRIPT_DIR"/../../scripts/install_system_dependencies.sh
 # setup conda
 conda env create -n dev -f envs/dev.yaml
 conda init
+
+# setup pre-commit
+pre-commit install --install-hooks

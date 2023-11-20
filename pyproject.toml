@@ -1,0 +1,28 @@
+[project]
+name = "Vectorizing"
+description = "Utility to vectorize raster images"
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.flake8]
+max-complexity = 12 # complexity checker threshold
+max-line-length = 88
+extend-ignore = [
+    # import order
+    'I100',
+    'I101',
+    'I202',
+]
+import-order-style = "google"
+docstring-convention = "numpy"
+strictness = "short"
+docstring-style = "numpy"
+suppress-none-returning = true
+mypy-init-return = true
+
+[tool.isort]
+profile = "black"
