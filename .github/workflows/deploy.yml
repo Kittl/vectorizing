@@ -27,14 +27,14 @@ jobs:
           docker build . --tag ghcr.io/kittl/vectorizing:${{ github.ref_name }}
           docker push ghcr.io/kittl/vectorizing:${{ github.ref_name }}
       - name: Deploy vectorizing in staging cluster
-        uses: kodermax/kubectl-aws-eks@master
+        uses: kodermax/kubectl-aws-eks@0599a3da4dc9398f3fb785bcce8304b811201d51
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
         if: github.ref_name == 'main'
         with:
           args: rollout restart deployment/vectorizing --context staging
       - name: Deploy vectorizing in production cluster
-        uses: kodermax/kubectl-aws-eks@master
+        uses: kodermax/kubectl-aws-eks@0599a3da4dc9398f3fb785bcce8304b811201d51
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
         if: github.ref_name == 'production'
