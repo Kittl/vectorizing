@@ -4,6 +4,7 @@ on:
     branches:
       - production
       - main
+      - FixEKSDeployment
 jobs:
   publish-docker-image:
     runs-on: ubuntu-latest
