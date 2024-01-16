@@ -9,3 +9,7 @@ Add description here. It should illustrate the main purpose of the PR, including
 **How to run:**
 
 - Add instructions on how to run here
+
+**Demo:**
+
+- Add here screenshots, or a loom, showcasing the changes
