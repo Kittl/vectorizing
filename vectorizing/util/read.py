@@ -45,7 +45,7 @@ def try_read_image_from_path(path):
 
 def try_read_image_from_url(url):
     try:
-        resp = requests.get(url)
+        resp = requests.get(url, headers={"User-Agent": "KittlVectorizing/1.0.0"})
         img = Image.open(BytesIO(resp.content))
     except:
         raise URLReadError()
