@@ -20,10 +20,8 @@ DEFAULT_SOLVER = 0
 PYTHON_ENV = os.getenv("PYTHON_ENV", "development")
 
 (
-    PORT, 
-    S3_BUCKET, 
-    AWS_ACCESS_KEY_ID, 
-    AWS_SECRET_ACCESS_KEY,
+    PORT,
+    S3_BUCKET,
 ) = get_required()
 
 (
@@ -44,7 +42,7 @@ def process_color(img, color_count, timer):
 def validate_args(args):
     if not 'url' in args:
         return False
-    
+
     solver = args.get('solver', DEFAULT_SOLVER)
     if not solver in SOLVERS:
         return False
@@ -57,7 +55,7 @@ def validate_args(args):
         only_numbers = all([isinstance(item, int) for item in box])
         if not only_numbers:
             return False
-    
+
     return SimpleNamespace(
         crop_box = box,
         solver = solver,
@@ -71,7 +69,7 @@ def invalid_args():
         "success": False,
         "error": "INVALID_PARAMETERS"
     }), 400
-    
+
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     app.debug = PYTHON_ENV == 'development'
@@ -79,7 +77,7 @@ def create_app(test_config=None):
     @app.route('/', methods = ['POST'])
     def index():
         args = request.json
-        
+
         args = validate_args(args)
         if not args:
             return invalid_args()
@@ -99,12 +97,12 @@ def create_app(test_config=None):
 
             if crop_box:
                 img = img.crop(tuple(crop_box))
-    
+
             if solver == 0:
                 timer.start_timer('Binary Solver - Total')
                 solved = process_binary(img)
                 timer.end_timer()
-            
+
             else:
                 timer.start_timer('Color Solver - Total')
                 solved = process_color(img, color_count, timer)
@@ -128,34 +126,34 @@ def create_app(test_config=None):
             timer.end_timer()
 
             app.logger.info(timer.timelog())
-            
-            return jsonify({ 
+
+            return jsonify({
                 'success': True,
-                'objectId': cuid_str, 
+                'objectId': cuid_str,
                 'info': {
                     'bounds': bounds.to_dict(),
                     'image_width': width,
                     'image_height': height
                 }
             })
-        
+
         except (Exception) as e:
             app.logger.error(e)
             return jsonify({
                 "success": False,
                 "error": "INTERNAL_SERVER_ERROR"
             }), 500
-        
+
     @app.route('/health', methods = ['GET'])
     def healthcheck():
         return jsonify({
             "success": True,
         }), 200
-    
+
     @app.route('/test-error', methods = ['GET'])
     def test_error():
         raise Exception('Test Error')
-    
+
     app.logger.info(f'Vectorizing server running on port: {PORT}, environment: {PYTHON_ENV}')
     if SENTRY_DSN:
         sentry_sdk.init(

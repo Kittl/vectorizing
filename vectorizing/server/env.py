@@ -2,9 +2,7 @@ import os
 
 REQUIRED_ENVIRONMENT_VARIABLES = {
     'PORT': int,
-    'S3_BUCKET': str,
-    'AWS_ACCESS_KEY_ID': str,
-    'AWS_SECRET_ACCESS_KEY': str
+    'S3_BUCKET': str
 }
 
 OPTIONAL_ENVIRONMENT_VARIABLES = {
@@ -23,9 +21,9 @@ def get_required():
 
     if missing_required:
         raise VariableNotDefinedException()
-    
+
     return [
-        cast(os.environ[key]) 
+        cast(os.environ[key])
         for key, cast in REQUIRED_ENVIRONMENT_VARIABLES.items()
     ]
 
