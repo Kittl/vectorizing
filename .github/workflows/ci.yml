@@ -25,7 +25,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     env:
-      PORT: "8000"
+      PORT: "5000"
       S3_BUCKET: "-"
       S3_TEST_BUCKET: "kittl-uploads-storage-staging"
     steps:
