@@ -10,10 +10,6 @@ on:
         description: The AWS region to use for ECR
         required: false
         type: string
-      aws-role-arn:
-        description: The AWS role to assume for ECR
-        required: true
-        type: string
       docker_file_path:
         description: >
           "The path to the Dockerfile to use for building the image. For example:
@@ -30,6 +26,10 @@ on:
         description: The platforms to build for
         required: false
         type: string
+    secrets:
+      ECR_ROLE_ARN:
+        description: The ECR role ARN
+        required: true
     outputs:
       image-tag:
         description: The docker image tag
@@ -59,7 +59,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ inputs.aws-region }}
-          role-to-assume: ${{ inputs.aws-role-arn }}
+          role-to-assume: ${{ secrets.ECR_ROLE_ARN }}
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2

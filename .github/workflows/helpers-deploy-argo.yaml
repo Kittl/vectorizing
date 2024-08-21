@@ -9,6 +9,9 @@ on:
       GH_PAT:
         description: "The GitHub Personal Access Token to use for checking out the helm-config repository"
         required: true
+      ECR_ROLE_ARN:
+        description: "The ECR role ARN"
+        required: true
 
 permissions:
   contents: write
@@ -20,8 +23,8 @@ jobs:
     uses: ./.github/workflows/helpers-build-docker-image.yaml
     name: Build Docker image
     with:
-      aws-role-arn: ${{ github.ref == 'refs/heads/production' && vars.PRODUCTION_ECR_ROLE_ARN || vars.STAGING_ECR_ROLE_ARN }}
       docker_file_path: Dockerfile
+    secrets: inherit
 
   update-helm-values:
     name: Update Helm values
