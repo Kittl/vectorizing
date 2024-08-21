@@ -1,7 +1,7 @@
 # add here production requirements
 
 cuid~=0.4
-boto3~=1.28.42
+boto3~=1.35.2
 flask~=2.3.3
 flask-cors~=4.0.0
 sentry-sdk~=1.30.0
