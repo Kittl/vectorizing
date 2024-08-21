@@ -1,0 +1,93 @@
+# This callable workflow builds and publish a package docker image
+
+name: helpers-build-docker-image
+
+on:
+  workflow_call:
+    inputs:
+      aws-region:
+        default: eu-central-1
+        description: The AWS region to use for ECR
+        required: false
+        type: string
+      aws-role-arn:
+        description: The AWS role to assume for ECR
+        required: true
+        type: string
+      docker_file_path:
+        description: >
+          "The path to the Dockerfile to use for building the image. For example:
+          `path/to/project/Dockerfile`"
+        type: string
+        required: true
+      extra-image-tags:
+        default: ''
+        description: Extra tags to use for the image (one per line)
+        required: false
+        type: string
+      platforms:
+        default: linux/amd64
+        description: The platforms to build for
+        required: false
+        type: string
+    outputs:
+      image-tag:
+        description: The docker image tag
+        value: ${{ jobs.build.outputs.image-tag }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+jobs:
+  build:
+    name: Build docker image and push to ECR
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.get-image-tag.outputs.image-tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          role-to-assume: ${{ inputs.aws-role-arn }}
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Get image tag output
+        shell: bash
+        id: get-image-tag
+        run: echo "image-tag=sha-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+      - name: Docker meta tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          flavor: |
+            latest=false
+          images: |
+            ${{ format('{0}/{1}', steps.login-ecr.outputs.registry, github.event.repository.name) }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha
+            ${{ inputs.extra-image-tags }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          context: .
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: ${{ inputs.platforms }}
+          provenance: false
+          push: true
+          file: ${{ inputs.docker_file_path }}

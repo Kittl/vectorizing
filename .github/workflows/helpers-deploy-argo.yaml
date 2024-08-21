@@ -1,0 +1,55 @@
+# This callable workflow builds and publish a package docker image via the helpers-build-docker-image workflow,
+# and then updates the image tag in the Helm chart values file in the development-application-config repo.
+
+name: helpers-deploy-argo
+
+on:
+  workflow_call:
+    secrets:
+      GH_PAT:
+        description: "The GitHub Personal Access Token to use for checking out the helm-config repository"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+  packages: read
+
+jobs:
+  build-docker-image:
+    uses: ./.github/workflows/helpers-build-docker-image.yaml
+    name: Build Docker image
+    with:
+      aws-role-arn: ${{ github.ref == 'refs/heads/production' && vars.PRODUCTION_ECR_ROLE_ARN || vars.STAGING_ECR_ROLE_ARN }}
+      docker_file_path: Dockerfile
+
+  update-helm-values:
+    name: Update Helm values
+    runs-on: ubuntu-latest
+    needs: build-docker-image
+    env:
+      ENVIRONMENT: ${{ github.ref == 'refs/heads/production' && 'production' || 'staging' }}
+      REPOSITORY: ${{ github.event.repository.name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Checkout helm config Repository
+        uses: actions/checkout@v4
+        with:
+          repository: Kittl/development-applications-config
+          ref: main
+          path: helm-config
+          token: ${{ secrets.GH_PAT }}
+          persist-credentials: false
+      - name: Update Image Version in the related HelmChart values.yaml
+        uses: fjogeleit/yaml-update-action@v0.14.0
+        with:
+          valueFile: ${{ format('{0}/{1}/values.yaml', env.ENVIRONMENT, env.REPOSITORY) }}
+          propertyPath: 'deployment.image.tag'
+          value: ${{ needs.build-docker-image.outputs.image-tag }}
+          repository: Kittl/development-applications-config
+          branch: main
+          createPR: false
+          message: 'Update Image Version to ${{ needs.build-docker-image.outputs.image-tag }}'
+          token: ${{ secrets.GH_PAT }}
+          workDir: helm-config
