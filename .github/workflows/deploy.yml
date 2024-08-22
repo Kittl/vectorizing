@@ -1,9 +1,11 @@
 name: deploy
+
 on:
   push:
-#    branches:
-#      - production
-#      - main
+    branches:
+      - production
+      - main
+      - 
 jobs:
   deploy-py-server-argo:
     name: Deploy PY server Argo
