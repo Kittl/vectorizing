@@ -1,42 +1,15 @@
 name: deploy
+
 on:
   push:
     branches:
       - production
       - main
+      - 
 jobs:
-  publish-docker-image:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository code
-        uses: actions/checkout@v2
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v1
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-central-1
-      - name: Publish the Docker image
-        run: |
-          docker build . --tag ghcr.io/kittl/vectorizing:${{ github.ref_name }}
-          docker push ghcr.io/kittl/vectorizing:${{ github.ref_name }}
-      - name: Deploy vectorizing in staging cluster
-        uses: kodermax/kubectl-aws-eks@main
-        env:
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
-        if: github.ref_name == 'main'
-        with:
-          args: rollout restart deployment/vectorizing --context staging
-      - name: Deploy vectorizing in production cluster
-        uses: kodermax/kubectl-aws-eks@main
-        env:
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
-        if: github.ref_name == 'production'
-        with:
-          args: rollout restart deployment/vectorizing --context production
+  deploy-py-server-argo:
+    name: Deploy PY server Argo
+    uses: ./.github/workflows/helpers-deploy-argo.yaml
+    secrets:
+      GH_PAT: ${{ secrets.GH_PAT }}
+      ECR_ROLE_ARN: ${{ github.ref == 'refs/heads/production' && secrets.PRODUCTION_ECR_ROLE_ARN || secrets.STAGING_ECR_ROLE_ARN }}

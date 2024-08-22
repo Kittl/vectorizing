@@ -1,7 +1,7 @@
 import cuid
 import boto3
 
-S3 = boto3.client("s3")
+S3 = boto3.client("s3", region_name="eu-central-1")
 
 def upload_markup (markup, s3_bucket_name):
     cuid_str = cuid.cuid()
@@ -21,7 +21,7 @@ def get_object_url(s3_file_key, s3_bucket_name):
             Key=s3_file_key,
             Bucket=s3_bucket_name
         )
-    
+
     except(Exception):
         return None
 
