@@ -1,0 +1,56 @@
+name: ci
+on: push
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - uses: pre-commit/action@v3.0.0
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    env:
+      PORT: "5000"
+      S3_BUCKET: "-"
+      S3_TEST_BUCKET: "kittl-uploads-storage-staging"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: 'eu-central-1'
+          role-to-assume: 'arn:aws:iam::339713006905:role/vectorizing-github-actions'
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.11
+      - name: Set up system dependencies
+        run: |
+          bash scripts/install_system_dependencies.sh
+      - name: Set up `dev` conda environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: dev
+          environment-file: envs/dev.yaml
+          auto-activate-base: false
+      - name: Run tests
+        shell: bash -el {0}
+        run: |
+          conda activate dev
+          python -m pytest vectorizing/tests/test.py
