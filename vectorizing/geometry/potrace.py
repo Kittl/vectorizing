@@ -55,8 +55,11 @@ def unfold_polygon(folded_polygon):
 # Given a compound path, it converts it to a compound polygon
 # by flattening curves.
 # All coordinates can be scaled for convenience (see pyclipper)
-def compound_path_to_compound_polygon(compound_path, scale = 1):
-    polygons = [[item.flattened().scaled(scale) for item in path] for path in compound_path]
+def compound_path_to_compound_polygon(compound_path, tolerance, scale=1):
+    polygons = [
+        [item.flattened(tolerance).scaled(scale) for item in path]
+        for path in compound_path
+    ]
     return [unfold_polygon(folded_polygon) for folded_polygon in polygons]
 
 # Given a compound polygon, it converts it to a compound path.

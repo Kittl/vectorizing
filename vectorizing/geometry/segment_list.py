@@ -11,7 +11,7 @@ class SegmentList:
     def scaled(self, s):
         return SegmentList(self.points * s)
 
-    def flattened(self):
+    def flattened(self, _):
         return self
     
     def to_list(self):
