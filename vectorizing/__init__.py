@@ -35,8 +35,8 @@ def process_binary(img):
     solver = BinarySolver(img)
     return solver.solve()
 
-def process_color(img, color_count, timer):
-    solver = ColorSolver(img, color_count, timer)
+def process_color(img, color_count, tolerance, timer):
+    solver = ColorSolver(img, color_count, tolerance, timer)
     return solver.solve()
 
 def validate_args(args):
@@ -56,12 +56,17 @@ def validate_args(args):
         if not only_numbers:
             return False
 
+    tolerance = args.get("tolerance")
+    if tolerance is not None and tolerance < 0:
+        return False
+    
     return SimpleNamespace(
-        crop_box = box,
-        solver = solver,
-        url = args.get('url'),
-        raw = args.get('raw'),
-        color_count = args.get('color_count'),
+        crop_box=box,
+        solver=solver,
+        url=args.get("url"),
+        raw=args.get("raw"),
+        color_count=args.get("color_count"),
+        tolerance=args.get("tolerance"),
     )
 
 def invalid_args():
@@ -87,6 +92,10 @@ def create_app(test_config=None):
         color_count = args.color_count
         raw = args.raw
         crop_box = args.crop_box
+        tolerance = args.tolerance
+
+        if tolerance is None:
+            tolerance = 0.2
 
         try:
             timer = Timer()
@@ -105,7 +114,7 @@ def create_app(test_config=None):
 
             else:
                 timer.start_timer('Color Solver - Total')
-                solved = process_color(img, color_count, timer)
+                solved = process_color(img, color_count, tolerance, timer)
                 timer.end_timer()
 
             compound_paths, colors, width, height = solved
@@ -122,7 +131,7 @@ def create_app(test_config=None):
             timer.end_timer()
 
             timer.start_timer('Bounds Creation')
-            bounds = compound_path_list_bounds(compound_paths)
+            bounds = compound_path_list_bounds(compound_paths, tolerance)
             timer.end_timer()
 
             app.logger.info(timer.timelog())

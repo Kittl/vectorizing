@@ -7,11 +7,12 @@ from vectorizing.solvers.color.clip import remove_layering
 from vectorizing.solvers.color.bitmaps import create_bitmaps
 
 class ColorSolver:
-    def __init__(self, img, color_count, timer):
+    def __init__(self, img, color_count, tolerance, timer):
         color_count = color_count or ColorSolver.DEFAULT_COLOR_COUNT
         color_count = max(color_count, ColorSolver.MIN_COLOR_COUNT)
         color_count = min(color_count, ColorSolver.MAX_COLOR_COUNT)
         self.color_count = color_count
+        self.tolerance = tolerance
 
         self.img = limit_size(img)
         
@@ -34,7 +35,7 @@ class ColorSolver:
         self.timer.end_timer()
 
         self.timer.start_timer('Polygon Clipping')
-        compound_paths = remove_layering(traced_bitmaps)
+        compound_paths = remove_layering(traced_bitmaps, self.tolerance)
         self.timer.end_timer()
         
         return [
