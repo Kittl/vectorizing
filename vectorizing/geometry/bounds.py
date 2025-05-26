@@ -34,19 +34,19 @@ def compute_total_bounds(bounds_list):
     )
 
 # Calculates bounds of a path made out CubicBeziers and SegmentLists
-def path_bounds(path):
-    bounds = [item.bounds() for item in path]
+def path_bounds(path, tolerance):
+    bounds = [item.bounds(tolerance) for item in path]
     return compute_total_bounds(bounds)
 
 # Calculates bounds of a compound path, meaning a list of paths
-def compound_path_bounds(compound_path):
-    bounds = [path_bounds(path) for path in compound_path]
+def compound_path_bounds(compound_path, tolerance):
+    bounds = [path_bounds(path, tolerance) for path in compound_path]
     return compute_total_bounds(bounds)
 
 # Calculates bounds of a list of compound paths
-def compound_path_list_bounds(compound_path_list):
+def compound_path_list_bounds(compound_path_list, tolerance):
     bounds = [
-        compound_path_bounds(compound_path) 
+        compound_path_bounds(compound_path, tolerance)
         for compound_path in compound_path_list
         if len(compound_path) > 0
     ]
