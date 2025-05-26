@@ -13,14 +13,14 @@ SCALE = 1_000_000
 
 # NOTE: The clipper library uses integer coordinates only for numerical robustness.
 # That's why coordinates are scaled by a big factor, to preserve precision.
-def remove_layering(traced_bitmaps):
+def remove_layering(traced_bitmaps, tolerance):
     compound_paths = [
         potrace_path_to_compound_path(traced) 
         for traced in traced_bitmaps
     ]
 
     compound_polygons = [
-        compound_path_to_compound_polygon(compound_path, SCALE) 
+        compound_path_to_compound_polygon(compound_path, tolerance, SCALE) 
         for compound_path in compound_paths
     ]
 
