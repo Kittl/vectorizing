@@ -17,7 +17,7 @@ class SegmentList:
     def to_list(self):
         return list(self.points)
     
-    def bounds(self):
+    def bounds(self, _):
         t = self.points.T
         x = t[0]
         y = t[1]
