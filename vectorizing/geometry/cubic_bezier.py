@@ -118,4 +118,4 @@ class CubicBezier:
         return SegmentList(np.array(flatten(points, tolerance)))
     
     def bounds(self, tolerance):
-        return self.flattened(tolerance).bounds()
+        return self.flattened(tolerance).bounds(tolerance)
