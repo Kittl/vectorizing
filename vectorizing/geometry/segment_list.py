@@ -11,13 +11,13 @@ class SegmentList:
     def scaled(self, s):
         return SegmentList(self.points * s)
 
-    def flattened(self):
+    def flattened(self, _):
         return self
     
     def to_list(self):
         return list(self.points)
     
-    def bounds(self):
+    def bounds(self, _):
         t = self.points.T
         x = t[0]
         y = t[1]

@@ -79,14 +79,14 @@ def subdivide(points):
     )
 
 @njit
-def flatten(points):
+def flatten(points, tolerance):
     stack = [points]
     flattened = []
 
     while len(stack):
         first = stack.pop()
 
-        if is_flat_enough(first):
+        if is_flat_enough(first, tolerance):
             flattened.append(first[0])
             flattened.append(first[1])
         
@@ -113,9 +113,9 @@ class CubicBezier:
             self.p3 * s
         )
     
-    def flattened(self):
+    def flattened(self, tolerance):
         points = (tuple(self.p0), tuple(self.p1), tuple(self.p2), tuple(self.p3))
-        return SegmentList(np.array(flatten(points)))
+        return SegmentList(np.array(flatten(points, tolerance)))
     
-    def bounds(self):
-        return self.flattened().bounds()
+    def bounds(self, tolerance):
+        return self.flattened(tolerance).bounds(tolerance)
