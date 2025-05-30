@@ -6,12 +6,12 @@ from flask import Flask, request, jsonify
 from vectorizing.server.timer import Timer
 from vectorizing.server.logs import setup_logs
 from vectorizing.server.s3 import upload_markup
-from vectorizing.svg.markup import create_markup
+from vectorizing.svg.markup import generate_SVG_markup
 from vectorizing.util.read import try_read_image_from_url
 from vectorizing.server.env import get_required, get_optional
 from vectorizing.solvers.color.ColorSolver import ColorSolver
 from vectorizing.solvers.binary.BinarySolver import BinarySolver
-from vectorizing.geometry.bounds import compound_path_list_bounds
+from vectorizing.geometry.bounds import compound_paths_bounds
 
 # 0 -> BinarySolver
 # 1 -> ColorSolver
@@ -35,8 +35,8 @@ def process_binary(img):
     solver = BinarySolver(img)
     return solver.solve()
 
-def process_color(img, color_count, tolerance, timer):
-    solver = ColorSolver(img, color_count, tolerance, timer)
+def process_color(img, color_count, timer):
+    solver = ColorSolver(img, color_count, timer)
     return solver.solve()
 
 def validate_args(args):
@@ -56,17 +56,12 @@ def validate_args(args):
         if not only_numbers:
             return False
 
-    tolerance = args.get("tolerance")
-    if tolerance is not None and tolerance < 0:
-        return False
-    
     return SimpleNamespace(
         crop_box=box,
         solver=solver,
         url=args.get("url"),
         raw=args.get("raw"),
-        color_count=args.get("color_count"),
-        tolerance=args.get("tolerance"),
+        color_count=args.get("color_count")
     )
 
 def invalid_args():
@@ -92,10 +87,6 @@ def create_app(test_config=None):
         color_count = args.color_count
         raw = args.raw
         crop_box = args.crop_box
-        tolerance = args.tolerance
-
-        if tolerance is None:
-            tolerance = 0.2
 
         try:
             timer = Timer()
@@ -114,13 +105,13 @@ def create_app(test_config=None):
 
             else:
                 timer.start_timer('Color Solver - Total')
-                solved = process_color(img, color_count, tolerance, timer)
+                solved = process_color(img, color_count, timer)
                 timer.end_timer()
 
             compound_paths, colors, width, height = solved
 
             timer.start_timer('Markup Creation')
-            markup = create_markup(compound_paths, colors, width, height)
+            markup = generate_SVG_markup(compound_paths, colors, width, height)
             timer.end_timer()
 
             if raw:
@@ -131,7 +122,7 @@ def create_app(test_config=None):
             timer.end_timer()
 
             timer.start_timer('Bounds Creation')
-            bounds = compound_path_list_bounds(compound_paths, tolerance)
+            bounds = compound_paths_bounds(compound_paths)
             timer.end_timer()
 
             app.logger.info(timer.timelog())
@@ -140,7 +131,7 @@ def create_app(test_config=None):
                 'success': True,
                 'objectId': cuid_str,
                 'info': {
-                    'bounds': bounds.to_dict(),
+                    'bounds': bounds,
                     'image_width': width,
                     'image_height': height
                 }
