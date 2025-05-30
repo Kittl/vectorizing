@@ -1,10 +1,17 @@
 from pathops import op, PathOp
 from vectorizing.geometry.potrace import potrace_path_to_compound_path
 
-
-# Ensures paths are disjoint after tracing.
-# See bitmaps.py for why this is important.
 def remove_layering(traced_bitmaps):
+    """
+    Performs boolean operations on a list of traced bitmaps
+    to ensure that they are all disjoint.
+
+            Parameters:
+                traced_bitmaps: The list of traced bitmaps (potrace paths).
+
+            Returns:
+                The processed list of compound paths.
+    """
     compound_paths = [
         potrace_path_to_compound_path(traced) for traced in traced_bitmaps
     ]
