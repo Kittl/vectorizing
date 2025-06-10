@@ -35,7 +35,7 @@ class ColorSolver:
         self.timer.end_timer()
 
         self.timer.start_timer("Polygon Clipping")
-        compound_paths = remove_layering(traced_bitmaps)
+        compound_paths = remove_layering(traced_bitmaps, self.img)
         self.timer.end_timer()
 
         return [compound_paths, colors, self.img.size[0], self.img.size[1]]
