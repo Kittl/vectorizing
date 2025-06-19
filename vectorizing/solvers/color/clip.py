@@ -20,7 +20,7 @@ def create_background_rect(img, padding):
     rect.close()
     return rect
 
-def remove_layering(traced_bitmaps, img):
+def remove_layering(traced_bitmaps, img, has_background):
     """
     Performs boolean operations on a list of traced bitmaps
     to ensure that they are all disjoint.
@@ -35,6 +35,7 @@ def remove_layering(traced_bitmaps, img):
         Parameters:
             traced_bitmaps: The list of traced bitmaps (potrace paths).
             img: A Pillow image.
+            has_background: Whether the image has a transparent background
 
         Returns:
             The processed list of compound paths.
@@ -42,6 +43,19 @@ def remove_layering(traced_bitmaps, img):
     compound_paths = [
         potrace_path_to_compound_path(traced) for traced in traced_bitmaps
     ]
+
+    if has_background:
+        # If there's a transparent background, the boolean trick
+        # can't be used because the top path (the one who contains all
+        # the subsequent ones before they are separated) does not cover
+        # the total area of the image
+        for x in range(len(compound_paths) - 1):
+            next = compound_paths[x + 1]
+            try:
+                compound_paths[x] = op(compound_paths[x], next, PathOp.DIFFERENCE)
+            except:
+                break
+        return compound_paths
 
     disjoint_paths = []
     for x in range(len(compound_paths) - 1):
