@@ -6,8 +6,8 @@ name: helpers-deploy-argo
 on:
   workflow_call:
     secrets:
-      GH_PAT:
-        description: "The GitHub Personal Access Token to use for checking out the helm-config repository"
+      KITTL_CI_APP_PRIVATE_KEY:
+        description: "The Kittl-CICD GitHub App private key to use for generating a short-living token"
         required: true
       ECR_ROLE_ARN:
         description: "The ECR role ARN"
@@ -36,13 +36,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Generate token
+        id: generate-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.KITTL_CI_APP_ID }}
+          private-key: ${{ secrets.KITTL_CI_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            development-applications-config
       - name: Checkout helm config Repository
         uses: actions/checkout@v4
         with:
           repository: Kittl/development-applications-config
           ref: main
           path: helm-config
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ secrets.KITTL_CI_APP_PRIVATE_KEY }}
           persist-credentials: false
       - name: Update Image Version in the related HelmChart values.yaml
         uses: fjogeleit/yaml-update-action@v0.14.0
@@ -54,5 +63,5 @@ jobs:
           branch: main
           createPR: false
           message: 'Update Image Version to ${{ needs.build-docker-image.outputs.image-tag }}'
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ secrets.KITTL_CI_APP_PRIVATE_KEY }}
           workDir: helm-config

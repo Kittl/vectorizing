@@ -11,5 +11,5 @@ jobs:
     name: Deploy PY server Argo
     uses: ./.github/workflows/helpers-deploy-argo.yaml
     secrets:
-      GH_PAT: ${{ secrets.GH_PAT }}
+      KITTL_CI_APP_PRIVATE_KEY: ${{ secrets.KITTL_CI_APP_PRIVATE_KEY }}
       ECR_ROLE_ARN: ${{ github.ref == 'refs/heads/production' && secrets.PRODUCTION_ECR_ROLE_ARN || secrets.STAGING_ECR_ROLE_ARN }}
