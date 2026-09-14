@@ -3,6 +3,7 @@ from functools import lru_cache
 
 import boto3
 import cuid
+from botocore.exceptions import ClientError
 
 
 @lru_cache(maxsize=1)
@@ -29,15 +30,18 @@ def upload_markup(markup, s3_bucket_name):
 
 
 def get_object_url(s3_file_key, s3_bucket_name):
+    s3 = get_s3_client()
     try:
-        get_s3_client().get_object(
+        s3.head_object(
             Key=s3_file_key,
             Bucket=s3_bucket_name,
         )
-    except Exception:
+    except ClientError as error:
+        if error.response["Error"]["Code"] not in {"404", "NoSuchKey", "NotFound"}:
+            raise
         return None
 
-    object_url = get_s3_client().generate_presigned_url(
+    object_url = s3.generate_presigned_url(
         ClientMethod="get_object",
         Params={"Bucket": s3_bucket_name, "Key": s3_file_key},
     )

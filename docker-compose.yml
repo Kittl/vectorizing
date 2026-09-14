@@ -1,6 +1,5 @@
 x-app: &app
   image: vectorizing:local
-  build: .
 
 services:
   moto:
@@ -19,6 +18,7 @@ services:
 
   moto-init:
     <<: *app
+    build: .
     environment: &local-aws
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
@@ -27,6 +27,7 @@ services:
       AWS_EC2_METADATA_DISABLED: "true"
       S3_BUCKET: vectorizing-local
       S3_TEST_BUCKET: vectorizing-tests
+      SENTRY_DSN: ${SENTRY_DSN:-}
       PORT: ${PORT:-8000}
     depends_on:
       moto:
@@ -50,6 +51,9 @@ services:
     profiles: [testing]
     environment:
       <<: *local-aws
+    volumes:
+      - ./vectorizing/tests/results:/app/vectorizing/tests/results
+      - ./vectorizing/tests/diff_output:/app/vectorizing/tests/diff_output
     depends_on:
       moto-init:
         condition: service_completed_successfully

@@ -30,4 +30,4 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Run tests against Moto
-        run: docker compose --profile testing run --rm test
+        run: docker compose --profile testing run --build --rm test

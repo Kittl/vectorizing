@@ -103,7 +103,7 @@ They should primarily focus on making sure that
 To run tests against the local Moto service, run:
 
 ```
-docker compose --profile testing run --rm test
+docker compose --profile testing run --build --rm test
 ```
 
 When running pytest outside Compose, configure the AWS variables for an S3-compatible service first.
