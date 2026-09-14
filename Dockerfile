@@ -10,6 +10,7 @@ RUN apt-get update -y && apt-get install -y \
     libpotrace-dev \
     pkg-config \
     libgl1 \
+    libcairo2 \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
