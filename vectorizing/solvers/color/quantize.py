@@ -49,6 +49,8 @@ def enhance(
     boundary[:, 1:] |= valid[:, :-1] & (labels[:, 1:] != labels[:, :-1])
     boundary[1:, 1:] |= valid[:-1, :-1] & (labels[1:, 1:] != labels[:-1, :-1])
 
+    # The boundary is fixed; reuse its complement for every color's area count.
+    interior = ~boundary
     cleaned = np.zeros(img_arr.shape[:2], dtype=np.uint16 if len(colors) else np.uint8)
     for index in range(len(colors)):
         cluster = labels == index + 1
@@ -58,7 +60,7 @@ def enhance(
         components = label(cluster, connectivity=2)
         original_counts = np.bincount(components.ravel())
         interior_counts = np.bincount(
-            components[~boundary],
+            components[interior],
             minlength=len(original_counts),
         )
         areas_ratio = np.divide(
