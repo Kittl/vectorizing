@@ -106,30 +106,10 @@ To run tests against the local Moto service, run:
 docker compose --profile testing run --build --rm test
 ```
 
-Compose and CI use `python -m pytest`, which discovers all test modules under
-`vectorizing/tests` via `pytest.ini`. When running outside Compose, configure the
-AWS variables for an S3-compatible service first.
+Tests are split into `test_*.py` files in `vectorizing/tests`. Compose and CI
+run them all. `color_reference.py` keeps the old code for before/after checks.
 
-### Test layout
-
-- `test_integration.py`: HTTP/S3, persisted raster baselines, and rendered alpha/seam checks.
-- `test_color_centroids.py`: used-palette colors, ordering, and dtype.
-- `test_color_bitmaps.py`: cumulative masks, palette gaps, and independent storage.
-- `test_color_cleanup.py`: component removal, morphology, dtype, and map lifetime.
-- `test_color_equivalence.py`: exact SVG, palette, dimensions, and bounds comparisons.
-- `color_reference.py`: deliberately frozen, slow pre-optimization algorithms.
-
-Keep reference algorithms independent of optimized production helpers. Raster tests
-seed missing baselines, so a fresh baseline is not proof of unchanged output; the
-exact-equivalence tests provide that check. Add new Python tests as `test_*.py`
-modules so the standard command includes them automatically.
-
-To run just the cleanup tests in Docker:
-
-```sh
-docker compose --profile testing run --build --rm test \
-  python -m pytest vectorizing/tests/test_color_cleanup.py
-```
+When running pytest outside Compose, configure the AWS variables for an S3-compatible service first.
 
 ### Required setup
 
