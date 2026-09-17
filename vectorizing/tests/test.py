@@ -1,6 +1,7 @@
 import os
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -175,24 +176,32 @@ def legacy_initial_centroids(img_arr: np.ndarray, color_count: int) -> np.ndarra
     return np.unique(pixels.reshape(-1, pixels.shape[-1]), axis=0).astype(np.uint8)
 
 
+@pytest.mark.parametrize(
+    "variant",
+    ["noise", "strided", "one-pixel", "solid", "sparse"],
+)
 @pytest.mark.parametrize("color_count", [2, 6, 16, 64])
 @pytest.mark.parametrize("seed", range(5))
-def test_initial_centroids_match_original(color_count: int, seed: int) -> None:
+def test_initial_centroids_match_original(
+    color_count: int,
+    seed: int,
+    variant: str,
+) -> None:
     """Preserve exact dtype, values and ordering on random and sparse RGB inputs."""
     rng = np.random.default_rng(seed)
     noise = rng.integers(0, 256, size=(63, 67, 3), dtype=np.uint8)
-    for pixels in (
-        noise,
-        noise[::2, ::2],  # Non-contiguous input.
-        noise[:1, :1],  # Only one used palette entry.
-        np.full_like(noise, (175, 80, 230)),  # Unused black entries must be ignored.
-        (noise // 128) * 128,  # Fewer distinct colors than some requests.
-    ):
-        expected = legacy_initial_centroids(pixels, color_count)
-        actual = color_quantize.get_initial_centroids(pixels, color_count)
-        np.testing.assert_equal(actual.dtype, expected.dtype)
-        np.testing.assert_equal(actual.dtype, np.dtype(np.uint8))
-        np.testing.assert_array_equal(actual, expected)
+    pixels = {
+        "noise": noise,
+        "strided": noise[::2, ::2],
+        "one-pixel": noise[:1, :1],
+        "solid": np.full_like(noise, (175, 80, 230)),  # Ignore unused black entries.
+        "sparse": (noise // 128) * 128,
+    }[variant]
+    expected = legacy_initial_centroids(pixels, color_count)
+    actual = color_quantize.get_initial_centroids(pixels, color_count)
+    np.testing.assert_equal(actual.dtype, expected.dtype)
+    np.testing.assert_equal(actual.dtype, np.dtype(np.uint8))
+    np.testing.assert_array_equal(actual, expected)
 
 
 def test_initial_centroids_ignore_unused_and_duplicate_palette_entries(
@@ -240,6 +249,10 @@ def legacy_create_bitmaps(
     return bitmaps, colors
 
 
+@pytest.mark.parametrize(
+    "variant",
+    ["noise", "strided", "one-row", "one-column", "solid", "background", "sparse"],
+)
 @pytest.mark.parametrize("color_count", [1, 2, 6, 16, 64, 65])
 @pytest.mark.parametrize("has_background", [False, True])
 @pytest.mark.parametrize("seed", range(3))
@@ -247,33 +260,34 @@ def test_bitmap_layering_matches_original(
     color_count: int,
     has_background: bool,
     seed: int,
+    variant: str,
 ) -> None:
     """Preserve masks, dtype, color order and read-only inputs across label patterns."""
     rng = np.random.default_rng(seed)
     noise = rng.integers(0, color_count, size=(19, 23), dtype=np.uint16)
     colors = rng.integers(0, 256, size=(color_count, 4), dtype=np.uint8)
     colors.setflags(write=False)
-    for labels in (
-        noise,
-        noise[::2, ::2],
-        noise[:1, :],
-        noise[:, :1],
-        np.full_like(noise, color_count - 1),
-        np.zeros_like(noise),
-        noise % 2,
-    ):
-        labels.setflags(write=False)
-        expected_bitmaps, expected_colors = legacy_create_bitmaps(
-            labels,
-            colors,
-            has_background,
-        )
-        actual_bitmaps, actual_colors = create_bitmaps(labels, colors, has_background)
-        np.testing.assert_array_equal(actual_colors, expected_colors)
-        np.testing.assert_equal(len(actual_bitmaps), len(expected_bitmaps))
-        for actual, expected in zip(actual_bitmaps, expected_bitmaps):
-            np.testing.assert_equal(actual.dtype, np.dtype(np.uint32))
-            np.testing.assert_array_equal(actual, expected)
+    labels = {
+        "noise": noise,
+        "strided": noise[::2, ::2],
+        "one-row": noise[:1, :],
+        "one-column": noise[:, :1],
+        "solid": np.full_like(noise, color_count - 1),
+        "background": np.zeros_like(noise),
+        "sparse": noise % 2,
+    }[variant]
+    labels.setflags(write=False)
+    expected_bitmaps, expected_colors = legacy_create_bitmaps(
+        labels,
+        colors,
+        has_background,
+    )
+    actual_bitmaps, actual_colors = create_bitmaps(labels, colors, has_background)
+    np.testing.assert_array_equal(actual_colors, expected_colors)
+    np.testing.assert_equal(len(actual_bitmaps), len(expected_bitmaps))
+    for actual, expected in zip(actual_bitmaps, expected_bitmaps):
+        np.testing.assert_equal(actual.dtype, np.dtype(np.uint32))
+        np.testing.assert_array_equal(actual, expected)
 
 
 @pytest.mark.parametrize("has_background", [False, True])
@@ -333,19 +347,21 @@ def test_color_optimizations_preserve_vectorization(
     """Compare final SVG, colors, dimensions and bounds against the old algorithm."""
     with Image.open(Path(__file__).parent / "images" / image_name) as image:
         actual = ColorSolver(image, color_count, Timer()).solve()
-        if optimization == "centroids":
-            monkeypatch.setattr(
-                color_quantize,
-                "get_initial_centroids",
+        target, legacy = {
+            "centroids": (
+                "vectorizing.solvers.color.quantize.get_initial_centroids",
                 legacy_initial_centroids,
-            )
-        else:
-            # ColorSolver imports the function directly; patch its lookup site.
-            monkeypatch.setattr(
+            ),
+            "bitmaps": (
                 "vectorizing.solvers.color.ColorSolver.create_bitmaps",
                 legacy_create_bitmaps,
-            )
+            ),
+        }[optimization]
+        # Patch each lookup site and verify the legacy implementation was used.
+        reference = Mock(wraps=legacy)
+        monkeypatch.setattr(target, reference)
         expected = ColorSolver(image, color_count, Timer()).solve()
+        reference.assert_called_once()
 
     actual_paths, actual_colors, actual_width, actual_height = actual
     expected_paths, expected_colors, expected_width, expected_height = expected

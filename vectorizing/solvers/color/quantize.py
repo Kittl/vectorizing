@@ -155,6 +155,7 @@ def get_initial_centroids(img_arr: np.ndarray, color_count: int) -> np.ndarray:
     # Ignore unused entries: palette padding must not add extra K-means clusters.
     # Keep np.unique's RGB order and deduplication, but sort only the used palette
     # rather than every pixel. Centroid order affects K-means results.
+    # quantize() returns mode P: at most 256 entries, within getcolors()'s cap.
     used_indices = [index for _, index in img.getcolors()]
     palette = np.asarray(img.getpalette("RGB"), dtype=np.uint8).reshape(-1, 3)
     return np.unique(palette[used_indices], axis=0)
