@@ -11,6 +11,7 @@ from vectorizing.geometry.bounds import compound_paths_bounds
 from vectorizing.server.s3 import get_s3_client
 from vectorizing.server.timer import Timer
 from vectorizing.solvers.color import quantize as color_quantize
+from vectorizing.solvers.color.bitmaps import create_bitmaps
 from vectorizing.solvers.color.ColorSolver import ColorSolver
 from vectorizing.svg.markup import generate_SVG_markup
 from vectorizing.tests import testutil
@@ -214,6 +215,102 @@ def test_initial_centroids_ignore_unused_and_duplicate_palette_entries(
     np.testing.assert_array_equal(actual, [[10, 20, 30], [90, 10, 20]])
 
 
+def legacy_create_bitmaps(
+    labels: np.ndarray,
+    colors: np.ndarray,
+    has_background: bool,
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """Freeze the original pairwise accumulation as an independent regression oracle."""
+    bitmaps = [
+        np.where(labels == index, 1, 0).astype(np.uint32)
+        for index in range(len(colors))
+    ]
+    if has_background:
+        bitmaps = bitmaps[1:]
+        colors = colors[1:]
+    zipped = list(zip(bitmaps, colors))
+    zipped = [[bitmap, color] for bitmap, color in zipped if np.sum(bitmap) > 0]
+    bitmaps = [bitmap for bitmap, _ in zipped]
+    colors = [color for _, color in zipped]
+    for x in range(len(bitmaps)):
+        bitmap_x = bitmaps[x]
+        for y in range(x + 1, len(bitmaps)):
+            bitmap_x += bitmaps[y]
+        bitmaps[x] = bitmap_x
+    return bitmaps, colors
+
+
+@pytest.mark.parametrize("color_count", [1, 2, 6, 16, 64, 65])
+@pytest.mark.parametrize("has_background", [False, True])
+@pytest.mark.parametrize("seed", range(3))
+def test_bitmap_layering_matches_original(
+    color_count: int,
+    has_background: bool,
+    seed: int,
+) -> None:
+    """Preserve masks, dtype, color order and read-only inputs across label patterns."""
+    rng = np.random.default_rng(seed)
+    noise = rng.integers(0, color_count, size=(19, 23), dtype=np.uint16)
+    colors = rng.integers(0, 256, size=(color_count, 4), dtype=np.uint8)
+    colors.setflags(write=False)
+    for labels in (
+        noise,
+        noise[::2, ::2],
+        noise[:1, :],
+        noise[:, :1],
+        np.full_like(noise, color_count - 1),
+        np.zeros_like(noise),
+        noise % 2,
+    ):
+        labels.setflags(write=False)
+        expected_bitmaps, expected_colors = legacy_create_bitmaps(
+            labels,
+            colors,
+            has_background,
+        )
+        actual_bitmaps, actual_colors = create_bitmaps(labels, colors, has_background)
+        np.testing.assert_array_equal(actual_colors, expected_colors)
+        np.testing.assert_equal(len(actual_bitmaps), len(expected_bitmaps))
+        for actual, expected in zip(actual_bitmaps, expected_bitmaps):
+            np.testing.assert_equal(actual.dtype, np.dtype(np.uint32))
+            np.testing.assert_array_equal(actual, expected)
+
+
+@pytest.mark.parametrize("has_background", [False, True])
+@pytest.mark.parametrize("color_count", [0, 1, 6])
+def test_bitmap_layering_handles_empty_inputs(
+    has_background: bool,
+    color_count: int,
+) -> None:
+    """Return no layers for empty labels or an empty palette."""
+    colors = np.zeros((color_count, 3), dtype=np.uint8)
+    labels = np.empty((0, 3), dtype=np.uint8)
+    np.testing.assert_equal(create_bitmaps(labels, colors, has_background), ([], []))
+    np.testing.assert_equal(
+        create_bitmaps(np.zeros((2, 2), dtype=np.uint8), colors[:0], has_background),
+        ([], []),
+    )
+
+
+def test_bitmap_layering_preserves_overlap_and_transparency() -> None:
+    """Keep suffix unions in palette order without including transparent pixels."""
+    labels = np.array([[0, 1, 3, 4]], dtype=np.uint8)
+    colors = np.arange(20, dtype=np.uint8).reshape(5, 4)
+    # Label zero is transparent; label two is unused between visible layers.
+    bitmaps, visible_colors = create_bitmaps(labels, colors, True)
+    expected = np.array(
+        [[[0, 1, 1, 1]], [[0, 0, 1, 1]], [[0, 0, 0, 1]]],
+        dtype=np.uint32,
+    )
+    np.testing.assert_array_equal(bitmaps, expected)
+    np.testing.assert_array_equal(visible_colors, colors[[1, 3, 4]])
+    # The in-place accumulation must not make different layers share storage.
+    bitmaps[0][0, 0] = 1
+    np.testing.assert_array_equal(bitmaps[1:], expected[1:])
+    np.testing.assert_array_equal(labels, [[0, 1, 3, 4]])
+
+
+@pytest.mark.parametrize("optimization", ["centroids", "bitmaps"])
 @pytest.mark.parametrize(
     "image_name, color_count",
     [
@@ -227,19 +324,27 @@ def test_initial_centroids_ignore_unused_and_duplicate_palette_entries(
         ("1px.jpg", 9),
     ],
 )
-def test_centroid_optimization_preserves_vectorization(
+def test_color_optimizations_preserve_vectorization(
     image_name: str,
     color_count: int,
+    optimization: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Compare final SVG, colors, dimensions and bounds against the old algorithm."""
     with Image.open(Path(__file__).parent / "images" / image_name) as image:
         actual = ColorSolver(image, color_count, Timer()).solve()
-        monkeypatch.setattr(
-            color_quantize,
-            "get_initial_centroids",
-            legacy_initial_centroids,
-        )
+        if optimization == "centroids":
+            monkeypatch.setattr(
+                color_quantize,
+                "get_initial_centroids",
+                legacy_initial_centroids,
+            )
+        else:
+            # ColorSolver imports the function directly; patch its lookup site.
+            monkeypatch.setattr(
+                "vectorizing.solvers.color.ColorSolver.create_bitmaps",
+                legacy_create_bitmaps,
+            )
         expected = ColorSolver(image, color_count, Timer()).solve()
 
     actual_paths, actual_colors, actual_width, actual_height = actual
