@@ -255,7 +255,8 @@ def test_centroid_optimization_preserves_vectorization(
     )
     # Byte-identical SVG is stricter than a raster tolerance and includes transparency.
     np.testing.assert_equal(
-        generate_SVG_markup(*actual), generate_SVG_markup(*expected)
+        generate_SVG_markup(*actual),
+        generate_SVG_markup(*expected),
     )
 
 
