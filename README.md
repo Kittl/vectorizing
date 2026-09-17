@@ -6,7 +6,17 @@ Utility to vectorize raster images :rocket:
 
 ## Local development
 
-#### **First time run**
+### Docker Compose (recommended)
+
+Docker Compose runs the application with a local [Moto](https://github.com/getmoto/moto) S3 server. No AWS account, credentials, bucket, or `.env` file is required.
+
+```bash
+docker compose up --build
+```
+
+The API is available at `http://localhost:8000`. Stop both services with `docker compose down`; Moto's data is intentionally discarded.
+
+#### **First time run (Dev Container)**
 
 Open this repository in the dev container:
 1. Install [`dev container`](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension in vscode
@@ -90,19 +100,22 @@ They should primarily focus on making sure that
 - Random requests with different input data don't crash the server
 - Changes in results don't go unnoticed
 
-To run tests, you can run
+To run tests against the local Moto service, run:
 
 ```
-python -m pytest vectorizing/tests/test.py
+docker compose --profile testing run --build --rm test
 ```
+
+When running pytest outside Compose, configure the AWS variables for an S3-compatible service first.
 
 ### Required setup
-If needed, update the `S3_TEST_BUCKET` environment variable in your `.env` file. You should have read + write access to it.
+
+The recommended Docker Compose test command uses Moto and requires no AWS access. When running tests outside Compose, configure `S3_TEST_BUCKET` and the standard AWS variables for the S3-compatible service you want to use.
 
 ### Adding new tests
 To add a new test:
 - Place the image you want to be tested inside `vectorizing/tests/images`
-- Add an entry to the `TEST` object in `vectorizing/tests/config.py` in the following form:
+- Add an entry to the `TESTS` object in `vectorizing/tests/config.py` in the following form:
 
    ```python
 	# New object entry
@@ -120,7 +133,7 @@ To add a new test:
 	]
    ```
 - Run the tests
-- Verify the output in `vectorizing/testing/results`. A new image of the test result should have been placed there. If it looks correct, keep it. It will be used as a baseline for subsequent test runs.
+- Verify the output in `vectorizing/tests/results`. A new image of the test result should have been placed there. If it looks correct, keep it. It will be used as a baseline for subsequent test runs.
 
 ## Failing tests
 - When any of the test cases fail, an entry will be placed in `vectorizing/tests/diff_output` highlighting the parts of the test result that are too far apart from the baseline entries.

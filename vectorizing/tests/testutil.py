@@ -1,13 +1,14 @@
+from pathlib import Path
+
 import cv2
 import numpy as np
 from PIL import Image
-from pathlib import Path
 from sewar.full_ref import uqi
 
 from vectorizing.server.env import get_optional
-from vectorizing.util.read import try_read_image_from_path
 from vectorizing.server.s3 import get_object_url, upload_file
 from vectorizing.solvers.binary.bitmap import alpha_blend
+from vectorizing.util.read import try_read_image_from_path
 
 (_, S3_TEST_BUCKET) = get_optional()
 
@@ -15,10 +16,11 @@ MAX_IMAGE_DIFFERENCE = 0.01
 MIN_UQI_PIXEL_COUNT = 64
 
 TESTS_FOLDER_PATH = Path(__file__).parent
-TMP_FOLDER_PATH = TESTS_FOLDER_PATH / 'tmp'
-IMAGES_FOLDER_PATH = TESTS_FOLDER_PATH / 'images'
-RESULTS_FOLDER_PATH = TESTS_FOLDER_PATH / 'results'
-DIFF_OUTPUT_FOLDER_PATH = TESTS_FOLDER_PATH / 'diff_output'
+TMP_FOLDER_PATH = TESTS_FOLDER_PATH / "tmp"
+IMAGES_FOLDER_PATH = TESTS_FOLDER_PATH / "images"
+RESULTS_FOLDER_PATH = TESTS_FOLDER_PATH / "results"
+DIFF_OUTPUT_FOLDER_PATH = TESTS_FOLDER_PATH / "diff_output"
+
 
 def get_image_url(img_name):
     """
@@ -40,8 +42,9 @@ def get_image_url(img_name):
 
     if object_url:
         return object_url
-    
-    return upload_file(IMAGES_FOLDER_PATH / img_name, S3_TEST_BUCKET, img_name)    
+
+    return upload_file(IMAGES_FOLDER_PATH / img_name, S3_TEST_BUCKET, img_name)
+
 
 def get_markup(client, img_name, request_params):
     """
@@ -64,18 +67,15 @@ def get_markup(client, img_name, request_params):
     image_url = get_image_url(img_name)
 
     request_params = {
-        'url': image_url,
-        'solver': request_params.get('solver'),
-        'color_count': request_params.get('color_count'),
-        'raw': True
+        "url": image_url,
+        "solver": request_params.get("solver"),
+        "color_count": request_params.get("color_count"),
+        "raw": True,
     }
-    return client.post('/', json = request_params).data
+    return client.post("/", json=request_params).data
 
-def compute_img_difference(
-    img,
-    expected_img_path,
-    small_image_test_factor = 0.1
-):
+
+def compute_img_difference(img, expected_img_path, small_image_test_factor=0.1):
     """
     Computes difference between two images using UQI
 
@@ -95,9 +95,9 @@ def compute_img_difference(
         0 means equal
         1 means completely different
     """
-    expected_img = try_read_image_from_path(expected_img_path)
+    expected_img = try_read_image_from_path(expected_img_path).convert("RGB")
     expected_img_arr = np.asarray(expected_img).astype(np.uint8)
-    img_arr = np.asarray(img).astype(np.uint8)
+    img_arr = np.asarray(img.convert("RGB")).astype(np.uint8)
 
     (height, width, _) = img_arr.shape
     px_count = width * height
@@ -108,7 +108,7 @@ def compute_img_difference(
         # much about such small images
 
         diff = img_arr - expected_img_arr
-        norm = np.linalg.norm(diff, axis = 2)
+        norm = np.linalg.norm(diff, axis=2)
 
         # A cell has label 0 for equal pixels, 1 for differing
         diff_labels = np.where(norm > 0, 1, 0)
@@ -126,6 +126,7 @@ def compute_img_difference(
     )
 
     return 1 - image_quality_index
+
 
 def convert_to_RGBGray(img_arr):
     """
@@ -153,6 +154,7 @@ def convert_to_RGBGray(img_arr):
     img_arr = cv2.cvtColor(img_arr, cv2.COLOR_GRAY2RGB)
     return img_arr
 
+
 def write_img_difference(predicted_img, expected_img_path, output_name):
     """
     Writes difference between two images to /diff_output
@@ -166,9 +168,9 @@ def write_img_difference(predicted_img, expected_img_path, output_name):
     output_name:
         The name of the file to be placed in diff_output
     """
-    expected_img = try_read_image_from_path(expected_img_path)
-    
-    predicted_img_arr = np.asarray(predicted_img).astype(np.uint8)
+    expected_img = try_read_image_from_path(expected_img_path).convert("RGB")
+
+    predicted_img_arr = np.asarray(predicted_img.convert("RGB")).astype(np.uint8)
     expected_img_arr = np.asarray(expected_img).astype(np.uint8)
     expected_img_rgbgray_arr = convert_to_RGBGray(expected_img_arr)
 
@@ -176,18 +178,18 @@ def write_img_difference(predicted_img, expected_img_path, output_name):
     diff = predicted_img_arr - expected_img_arr
 
     # Per-pixel distance between images
-    diffnorm = np.linalg.norm(diff, axis = 2)
+    diffnorm = np.linalg.norm(diff, axis=2)
 
     # Maximum distance between any two (matching) pixels
     maxnorm = np.max(diffnorm)
 
-    # Per-pixel distance between images (normalized between 0 and 1) 
+    # Per-pixel distance between images (normalized between 0 and 1)
     normalized_norm = diffnorm / maxnorm
 
     # We use the normalized distances to assign a highlight intensity to each pixel
     # Note that pixels that don't differ will have an intensity of zero,
     # and the most differing pixels, 255
-    hightlights = (normalized_norm * 255)
+    hightlights = normalized_norm * 255
 
     (r, g, b) = cv2.split(expected_img_rgbgray_arr)
 
