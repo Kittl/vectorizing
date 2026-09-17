@@ -5,11 +5,13 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import Mock
 
+import cv2
 import numpy as np
 import pytest
 from cairosvg import svg2png
 from flask.testing import FlaskClient
 from PIL import Image
+from skimage.measure import label
 
 from vectorizing.geometry.bounds import compound_paths_bounds
 from vectorizing.server.s3 import get_s3_client
@@ -266,7 +268,193 @@ def test_bitmap_layering_preserves_overlap_and_transparency() -> None:
     np.testing.assert_array_equal(labels, [[0, 1, 3, 4]])
 
 
-@pytest.mark.parametrize("optimization", ["centroids", "bitmaps"])
+def legacy_enhance(
+    img_arr: np.ndarray,
+    labels: np.ndarray,
+    colors: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Freeze main's pairwise cleanup as an independent regression oracle."""
+    dims = img_arr.shape[:2]
+    labels = labels + 1
+    clusters = [
+        np.where(labels == idx + 1, idx + 1, 0).astype(np.uint16)
+        for idx, _ in enumerate(colors)
+    ]
+    original_connected_components_list = [label(cluster) + 1 for cluster in clusters]
+    connected_components_bincounts = [
+        np.bincount(connected_components.flatten())
+        for connected_components in original_connected_components_list
+    ]
+    connected_components_list = [
+        np.array(item, copy=True) for item in original_connected_components_list
+    ]
+    for x, cluster_x in enumerate(clusters):
+        dilated_cluster_x = cv2.dilate(cluster_x, np.ones((2, 2)))
+        for y, cluster_y in enumerate(clusters):
+            if x == y:
+                continue
+            overlap = np.logical_and(dilated_cluster_x, cluster_y)
+            connected_components_list[y] = np.where(
+                overlap,
+                0,
+                connected_components_list[y],
+            )
+    for x, connected_components in enumerate(connected_components_list):
+        original_bincount = connected_components_bincounts[x]
+        count = original_bincount.shape[0]
+        new_bincount = np.bincount(connected_components.flatten(), minlength=count)
+        areas_ratio = np.divide(
+            new_bincount.astype(np.float32),
+            original_bincount.astype(np.float32),
+            out=np.ones((count,), dtype=np.float32),
+            where=original_bincount != 0,
+        )
+        clusters[x] = np.where(
+            areas_ratio[original_connected_components_list[x]] <= 0.1,
+            0,
+            clusters[x],
+        )
+    labels = np.zeros(dims).astype(np.uint8)
+    for cluster in clusters:
+        labels = np.where(labels == 0, cluster, labels)
+    return color_quantize.fill_holes(labels) - 1, colors
+
+
+@pytest.mark.parametrize("before_fill", [False, True], ids=["filled", "unfilled"])
+@pytest.mark.parametrize(
+    "variant",
+    [
+        "noise",
+        "strided",
+        "one-pixel",
+        "one-row",
+        "one-column",
+        "solid",
+        "sparse",
+        "checkerboard",
+    ],
+)
+@pytest.mark.parametrize("color_count", [1, 2, 6, 16, 64, 65])
+@pytest.mark.parametrize("seed", range(3))
+def test_cluster_cleanup_matches_original(
+    before_fill: bool,
+    variant: str,
+    color_count: int,
+    seed: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Preserve component decisions and filled labels without mutating inputs."""
+    rng = np.random.default_rng(seed)
+    noise = rng.integers(0, color_count, (19, 23), dtype=np.uint8)
+    labels = {
+        "noise": noise,
+        "strided": noise[::2, ::2],
+        "one-pixel": noise[:1, :1],
+        "one-row": noise[:1, :],
+        "one-column": noise[:, :1],
+        "solid": np.full_like(noise, color_count - 1),
+        "sparse": noise % 2,
+        "checkerboard": (
+            np.indices(noise.shape).sum(axis=0) % min(color_count, 2)
+        ).astype(np.uint8),
+    }[variant]
+    colors = rng.integers(0, 256, (color_count, 4), dtype=np.uint8)
+    pixels = np.zeros((*labels.shape, 3), dtype=np.uint8)
+    labels.setflags(write=False)
+    colors.setflags(write=False)
+    pixels.setflags(write=False)
+    original_labels = labels.copy()
+    if before_fill:
+        monkeypatch.setattr(color_quantize, "fill_holes", lambda matrix: matrix)
+    expected, expected_colors = legacy_enhance(pixels, labels, colors)
+    actual, actual_colors = color_quantize.enhance(pixels, labels, colors)
+    np.testing.assert_array_equal(actual, expected)
+    np.testing.assert_equal(actual.dtype, expected.dtype)
+    np.testing.assert_array_equal(actual_colors, expected_colors)
+    np.testing.assert_equal(actual_colors is colors, True)
+    np.testing.assert_array_equal(labels, original_labels)
+
+
+@pytest.mark.parametrize("area", [9, 10, 11])
+def test_cluster_cleanup_preserves_inclusive_area_threshold(
+    area: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep a component with 1/9 interior area, but remove 1/10 and 1/11."""
+    labels = np.zeros((8, 16), dtype=np.uint8)
+    labels[2, 2:area] = 1
+    labels[3, 2:4] = 1
+    colors = np.zeros((2, 3), dtype=np.uint8)
+    pixels = np.zeros((*labels.shape, 3), dtype=np.uint8)
+    monkeypatch.setattr(color_quantize, "fill_holes", lambda matrix: matrix)
+    expected = labels.astype(np.uint16)
+    if area >= 10:
+        expected[labels == 1] = np.iinfo(np.uint16).max
+    for cleaner in (legacy_enhance, color_quantize.enhance):
+        actual, _ = cleaner(pixels, labels, colors)
+        np.testing.assert_array_equal(actual, expected)
+
+
+def test_cluster_cleanup_preserves_diagonal_connectivity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Treat a 2x2 core and its diagonal thin tail as one removable component."""
+    labels = np.zeros((8, 16), dtype=np.uint8)
+    labels[2:4, 2:4] = 1
+    labels[4, 4:11] = 1
+    colors = np.zeros((2, 3), dtype=np.uint8)
+    pixels = np.zeros((*labels.shape, 3), dtype=np.uint8)
+    monkeypatch.setattr(color_quantize, "fill_holes", lambda matrix: matrix)
+    expected = labels.astype(np.uint16)
+    expected[labels == 1] = np.iinfo(np.uint16).max
+    for cleaner in (legacy_enhance, color_quantize.enhance):
+        actual, _ = cleaner(pixels, labels, colors)
+        np.testing.assert_array_equal(actual, expected)
+
+
+def test_cluster_cleanup_preserves_dilation_anchor_and_border(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The 2x2 default anchor spares only the isolated top-left corner pixel."""
+    labels = np.zeros((5, 5), dtype=np.uint8)
+    labels[::4, ::4] = 1
+    colors = np.zeros((2, 3), dtype=np.uint8)
+    pixels = np.zeros((*labels.shape, 3), dtype=np.uint8)
+    monkeypatch.setattr(color_quantize, "fill_holes", lambda matrix: matrix)
+    expected = labels.astype(np.uint16)
+    expected[labels == 1] = np.iinfo(np.uint16).max
+    expected[0, 0] = 1
+    for cleaner in (legacy_enhance, color_quantize.enhance):
+        actual, _ = cleaner(pixels, labels, colors)
+        np.testing.assert_array_equal(actual, expected)
+
+
+@pytest.mark.parametrize("before_fill", [False, True], ids=["filled", "unfilled"])
+@pytest.mark.parametrize("color_count", [0, 1, 3, 256])
+@pytest.mark.parametrize("dtype", [np.uint8, np.uint16, np.int16])
+def test_cluster_cleanup_preserves_unassigned_labels_and_dtype(
+    color_count: int,
+    dtype: type[np.generic],
+    before_fill: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ignore unassigned neighbors and retain existing label-shift overflow behavior."""
+    rng = np.random.default_rng(42)
+    labels = rng.choice([0, 1, 2, 3, 254, 255], size=(7, 9)).astype(dtype)
+    if dtype == np.int16:
+        labels[1, 1:3] = [-1, -2]
+    if before_fill:
+        monkeypatch.setattr(color_quantize, "fill_holes", lambda matrix: matrix)
+    colors = np.zeros((color_count, 3), dtype=np.uint8)
+    pixels = np.zeros((*labels.shape, 3), dtype=np.uint8)
+    expected, _ = legacy_enhance(pixels, labels, colors)
+    actual, actual_colors = color_quantize.enhance(pixels, labels, colors)
+    np.testing.assert_array_equal(actual, expected)
+    np.testing.assert_equal(actual.dtype, expected.dtype)
+    np.testing.assert_equal(actual_colors is colors, True)
+
+
+@pytest.mark.parametrize("optimization", ["centroids", "bitmaps", "cleanup"])
 @pytest.mark.parametrize(
     "image_name, color_count",
     [
@@ -297,6 +485,10 @@ def test_color_optimizations_preserve_vectorization(
             "bitmaps": (
                 "vectorizing.solvers.color.ColorSolver.create_bitmaps",
                 legacy_create_bitmaps,
+            ),
+            "cleanup": (
+                "vectorizing.solvers.color.quantize.enhance",
+                legacy_enhance,
             ),
         }[optimization]
         # Patch each lookup site and verify the legacy implementation was used.
