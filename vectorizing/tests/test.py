@@ -1,6 +1,7 @@
 import os
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -11,6 +12,7 @@ from vectorizing.geometry.bounds import compound_paths_bounds
 from vectorizing.server.s3 import get_s3_client
 from vectorizing.server.timer import Timer
 from vectorizing.solvers.color import quantize as color_quantize
+from vectorizing.solvers.color.bitmaps import create_bitmaps
 from vectorizing.solvers.color.ColorSolver import ColorSolver
 from vectorizing.svg.markup import generate_SVG_markup
 from vectorizing.tests import testutil
@@ -174,24 +176,32 @@ def legacy_initial_centroids(img_arr: np.ndarray, color_count: int) -> np.ndarra
     return np.unique(pixels.reshape(-1, pixels.shape[-1]), axis=0).astype(np.uint8)
 
 
+@pytest.mark.parametrize(
+    "variant",
+    ["noise", "strided", "one-pixel", "solid", "sparse"],
+)
 @pytest.mark.parametrize("color_count", [2, 6, 16, 64])
 @pytest.mark.parametrize("seed", range(5))
-def test_initial_centroids_match_original(color_count: int, seed: int) -> None:
+def test_initial_centroids_match_original(
+    color_count: int,
+    seed: int,
+    variant: str,
+) -> None:
     """Preserve exact dtype, values and ordering on random and sparse RGB inputs."""
     rng = np.random.default_rng(seed)
     noise = rng.integers(0, 256, size=(63, 67, 3), dtype=np.uint8)
-    for pixels in (
-        noise,
-        noise[::2, ::2],  # Non-contiguous input.
-        noise[:1, :1],  # Only one used palette entry.
-        np.full_like(noise, (175, 80, 230)),  # Unused black entries must be ignored.
-        (noise // 128) * 128,  # Fewer distinct colors than some requests.
-    ):
-        expected = legacy_initial_centroids(pixels, color_count)
-        actual = color_quantize.get_initial_centroids(pixels, color_count)
-        np.testing.assert_equal(actual.dtype, expected.dtype)
-        np.testing.assert_equal(actual.dtype, np.dtype(np.uint8))
-        np.testing.assert_array_equal(actual, expected)
+    pixels = {
+        "noise": noise,
+        "strided": noise[::2, ::2],
+        "one-pixel": noise[:1, :1],
+        "solid": np.full_like(noise, (175, 80, 230)),  # Ignore unused black entries.
+        "sparse": (noise // 128) * 128,
+    }[variant]
+    expected = legacy_initial_centroids(pixels, color_count)
+    actual = color_quantize.get_initial_centroids(pixels, color_count)
+    np.testing.assert_equal(actual.dtype, expected.dtype)
+    np.testing.assert_equal(actual.dtype, np.dtype(np.uint8))
+    np.testing.assert_array_equal(actual, expected)
 
 
 def test_initial_centroids_ignore_unused_and_duplicate_palette_entries(
@@ -214,6 +224,107 @@ def test_initial_centroids_ignore_unused_and_duplicate_palette_entries(
     np.testing.assert_array_equal(actual, [[10, 20, 30], [90, 10, 20]])
 
 
+def legacy_create_bitmaps(
+    labels: np.ndarray,
+    colors: np.ndarray,
+    has_background: bool,
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """Freeze the original pairwise accumulation as an independent regression oracle."""
+    bitmaps = [
+        np.where(labels == index, 1, 0).astype(np.uint32)
+        for index in range(len(colors))
+    ]
+    if has_background:
+        bitmaps = bitmaps[1:]
+        colors = colors[1:]
+    zipped = list(zip(bitmaps, colors))
+    zipped = [[bitmap, color] for bitmap, color in zipped if np.sum(bitmap) > 0]
+    bitmaps = [bitmap for bitmap, _ in zipped]
+    colors = [color for _, color in zipped]
+    for x in range(len(bitmaps)):
+        bitmap_x = bitmaps[x]
+        for y in range(x + 1, len(bitmaps)):
+            bitmap_x += bitmaps[y]
+        bitmaps[x] = bitmap_x
+    return bitmaps, colors
+
+
+@pytest.mark.parametrize(
+    "variant",
+    ["noise", "strided", "one-row", "one-column", "solid", "background", "sparse"],
+)
+@pytest.mark.parametrize("color_count", [1, 2, 6, 16, 64, 65])
+@pytest.mark.parametrize("has_background", [False, True])
+@pytest.mark.parametrize("seed", range(3))
+def test_bitmap_layering_matches_original(
+    color_count: int,
+    has_background: bool,
+    seed: int,
+    variant: str,
+) -> None:
+    """Preserve masks, dtype, color order and read-only inputs across label patterns."""
+    rng = np.random.default_rng(seed)
+    noise = rng.integers(0, color_count, size=(19, 23), dtype=np.uint16)
+    colors = rng.integers(0, 256, size=(color_count, 4), dtype=np.uint8)
+    colors.setflags(write=False)
+    labels = {
+        "noise": noise,
+        "strided": noise[::2, ::2],
+        "one-row": noise[:1, :],
+        "one-column": noise[:, :1],
+        "solid": np.full_like(noise, color_count - 1),
+        "background": np.zeros_like(noise),
+        "sparse": noise % 2,
+    }[variant]
+    labels.setflags(write=False)
+    expected_bitmaps, expected_colors = legacy_create_bitmaps(
+        labels,
+        colors,
+        has_background,
+    )
+    actual_bitmaps, actual_colors = create_bitmaps(labels, colors, has_background)
+    np.testing.assert_array_equal(actual_colors, expected_colors)
+    np.testing.assert_equal(len(actual_bitmaps), len(expected_bitmaps))
+    for actual, expected in zip(actual_bitmaps, expected_bitmaps):
+        np.testing.assert_equal(actual.dtype, np.dtype(np.uint32))
+        np.testing.assert_array_equal(actual, expected)
+
+
+@pytest.mark.parametrize("has_background", [False, True])
+@pytest.mark.parametrize("color_count", [0, 1, 6])
+def test_bitmap_layering_handles_empty_inputs(
+    has_background: bool,
+    color_count: int,
+) -> None:
+    """Return no layers for empty labels or an empty palette."""
+    colors = np.zeros((color_count, 3), dtype=np.uint8)
+    labels = np.empty((0, 3), dtype=np.uint8)
+    np.testing.assert_equal(create_bitmaps(labels, colors, has_background), ([], []))
+    np.testing.assert_equal(
+        create_bitmaps(np.zeros((2, 2), dtype=np.uint8), colors[:0], has_background),
+        ([], []),
+    )
+
+
+def test_bitmap_layering_preserves_overlap_and_transparency() -> None:
+    """Keep suffix unions in palette order without including transparent pixels."""
+    labels = np.array([[0, 1, 3, 4]], dtype=np.uint8)
+    colors = np.arange(20, dtype=np.uint8).reshape(5, 4)
+    # Label zero is transparent; label two is unused between visible layers.
+    bitmaps, visible_colors = create_bitmaps(labels, colors, True)
+    expected = np.array(
+        [[[0, 1, 1, 1]], [[0, 0, 1, 1]], [[0, 0, 0, 1]]],
+        dtype=np.uint32,
+    )
+    np.testing.assert_array_equal(bitmaps, expected)
+    np.testing.assert_array_equal(visible_colors, colors[[1, 3, 4]])
+    # The in-place accumulation must not make different layers share storage.
+    bitmaps[0][0, 0] = 1
+    np.testing.assert_array_equal(bitmaps[1:], expected[1:])
+    np.testing.assert_array_equal(labels, [[0, 1, 3, 4]])
+
+
+@pytest.mark.parametrize("optimization", ["centroids", "bitmaps"])
 @pytest.mark.parametrize(
     "image_name, color_count",
     [
@@ -227,20 +338,30 @@ def test_initial_centroids_ignore_unused_and_duplicate_palette_entries(
         ("1px.jpg", 9),
     ],
 )
-def test_centroid_optimization_preserves_vectorization(
+def test_color_optimizations_preserve_vectorization(
     image_name: str,
     color_count: int,
+    optimization: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Compare final SVG, colors, dimensions and bounds against the old algorithm."""
     with Image.open(Path(__file__).parent / "images" / image_name) as image:
         actual = ColorSolver(image, color_count, Timer()).solve()
-        monkeypatch.setattr(
-            color_quantize,
-            "get_initial_centroids",
-            legacy_initial_centroids,
-        )
+        target, legacy = {
+            "centroids": (
+                "vectorizing.solvers.color.quantize.get_initial_centroids",
+                legacy_initial_centroids,
+            ),
+            "bitmaps": (
+                "vectorizing.solvers.color.ColorSolver.create_bitmaps",
+                legacy_create_bitmaps,
+            ),
+        }[optimization]
+        # Patch each lookup site and verify the legacy implementation was used.
+        reference = Mock(wraps=legacy)
+        monkeypatch.setattr(target, reference)
         expected = ColorSolver(image, color_count, Timer()).solve()
+        reference.assert_called_once()
 
     actual_paths, actual_colors, actual_width, actual_height = actual
     expected_paths, expected_colors, expected_width, expected_height = expected
