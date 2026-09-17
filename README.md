@@ -106,6 +106,9 @@ To run tests against the local Moto service, run:
 docker compose --profile testing run --build --rm test
 ```
 
+Tests are split into `test_*.py` files in `vectorizing/tests`. Compose and CI
+run them all. `color_reference.py` keeps the old code for before/after checks.
+
 When running pytest outside Compose, configure the AWS variables for an S3-compatible service first.
 
 ### Required setup

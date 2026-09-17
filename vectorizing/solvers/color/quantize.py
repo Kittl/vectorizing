@@ -18,11 +18,6 @@ def bilateral_filter(
 ):
     return cv2.bilateralFilter(img_arr, d, s, s)
 
-# First erodes a matrix, then dilates it
-def dilate(matrix):
-    kernel = np.ones((2, 2))
-    return cv2.dilate(matrix, kernel)
-
 # Fills holes (defined as cells that are zero) in a matrix
 # By using the closes value found in the matrix that is not zero.
 # See: https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.distance_transform_edt.html
@@ -35,93 +30,51 @@ def fill_holes(matrix):
     matrix = np.where(matrix != 0, matrix, matrix[closest[0], closest[1]])
     return matrix
 
-def enhance(img_arr, labels, colors):    
-    dims = img_arr.shape[:2]
 
-    # 0 will be reserved for "unwritten" cells, or holes
+def enhance(
+    img_arr: np.ndarray,
+    labels: np.ndarray,
+    colors: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Remove boundary-dominated components with O(K*N) work and O(N) image storage."""
+    # Reserve zero for holes, preserving the existing input-dtype shift behavior.
     labels = labels + 1
+    valid = (labels > 0) & (labels <= len(colors))
 
-    clusters = [
-        # Even though we don't allow it, technically the max
-        # value in labels (before adding 1) is 255, so it's safer
-        # to convert to uint16 to avoid overflows
-        np.where(labels == idx + 1, idx + 1, 0).astype(np.uint16) 
-        for idx, _ in enumerate(colors)
-    ]
+    # OpenCV's 2x2 dilation (default anchor/border) reaches a pixel from above,
+    # left, and upper-left. Mark overlap from any OTHER palette color once,
+    # without treating missing/out-of-palette neighbors as a dilated cluster.
+    boundary = np.zeros(labels.shape, dtype=bool)
+    boundary[1:, :] |= valid[:-1, :] & (labels[1:, :] != labels[:-1, :])
+    boundary[:, 1:] |= valid[:, :-1] & (labels[:, 1:] != labels[:, :-1])
+    boundary[1:, 1:] |= valid[:-1, :-1] & (labels[1:, 1:] != labels[:-1, :-1])
 
-    # For each cluster, store a matrix of its connected components
-    # NOTE: see https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.label
-    original_connected_components_list = [
-        label(cluster) + 1 
-        for cluster in clusters
-    ]
-
-    # Bincounts for each connected components matrix
-    # Meaning bincount[i] = num_appearances(matrix, i)
-    # It's used later to determine what should be erased
-    connected_components_bincounts = [
-        np.bincount(connected_components.flatten())
-        for connected_components in original_connected_components_list
-    ]
-
-    # Make a copy of the connected components
-    # These will be modified and compared with the originals later
-    connected_components_list = [
-        np.array(item, copy = True) 
-        for item in original_connected_components_list
-    ]
-
-    for x, cluster_x in enumerate(clusters):
-        dilated_cluster_x = dilate(cluster_x)
-
-        for y, cluster_y in enumerate(clusters):
-            if x == y:
-                continue
-
-            # The overlap between dilated_cluster_x and cluster_y,
-            # meaning, the part of cluster_y that dilated_cluster_x covers
-            overlap = np.logical_and(dilated_cluster_x, cluster_y)
-
-            # Remove overlap from connected components
-            connected_components_list[y] = np.where(
-                overlap,
-                0,
-                connected_components_list[y]
-            )
-
-    for x, connected_components in enumerate(connected_components_list):
-        original_bincount = connected_components_bincounts[x]
-        count = original_bincount.shape[0]
-        
-        new_bincount = np.bincount(
-            connected_components.flatten(), 
-            minlength = count # Force same length
+    # The boundary is fixed; reuse its complement for every color's area count.
+    interior = ~boundary
+    cleaned = np.zeros(img_arr.shape[:2], dtype=np.uint16 if len(colors) else np.uint8)
+    for index in range(len(colors)):
+        cluster = labels == index + 1
+        if not cluster.any():
+            continue
+        # Keep full (8-neighbor) connectivity, including diagonal contacts.
+        components = label(cluster, connectivity=2)
+        original_counts = np.bincount(components.ravel())
+        interior_counts = np.bincount(
+            components[interior],
+            minlength=len(original_counts),
         )
-
         areas_ratio = np.divide(
-            new_bincount.astype(np.float32),
-            original_bincount.astype(np.float32),
-            out = np.ones((count, ), dtype = np.float32),
-            where = original_bincount != 0
+            interior_counts.astype(np.float32),
+            original_counts.astype(np.float32),
+            out=np.ones(len(original_counts), dtype=np.float32),
+            where=original_counts != 0,
         )
+        # Retain whole components, using the same float32, inclusive <=0.1 cutoff.
+        cleaned[cluster & (areas_ratio[components] > 0.1)] = index + 1
+        # Release this map before allocating the next color's component map.
+        del components
 
-        # Update cluster
-        # Connected components that lost more than 0.9 of their original area
-        # are completely removed, others are kept
-        clusters[x] = np.where(
-            areas_ratio[original_connected_components_list[x]] <= 0.1, 
-            0, 
-            clusters[x]
-        )
-
-    # Update labels with new cluster data
-    labels = np.zeros(dims).astype(np.uint8)
-    for cluster in clusters:
-        labels = np.where(labels == 0, cluster, labels)
-
-    # Fill holes
-    labels = fill_holes(labels)
-    return labels - 1, colors
+    return fill_holes(cleaned) - 1, colors
 
 # Try to get the cluster of pixels that represent a transparent background
 # If there is no transparent background, return None
