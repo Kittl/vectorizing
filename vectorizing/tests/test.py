@@ -7,8 +7,10 @@ import pytest
 from cairosvg import svg2png
 from PIL import Image
 
+from vectorizing.geometry.bounds import compound_paths_bounds
 from vectorizing.server.s3 import get_s3_client
 from vectorizing.server.timer import Timer
+from vectorizing.solvers.color import quantize as color_quantize
 from vectorizing.solvers.color.ColorSolver import ColorSolver
 from vectorizing.svg.markup import generate_SVG_markup
 from vectorizing.tests import testutil
@@ -159,6 +161,103 @@ def test_color_solver_preserves_empty_transparent_image():
     rendered = Image.open(BytesIO(svg2png(bytestring=markup))).convert("RGBA")
 
     assert rendered.getchannel("A").getextrema() == (0, 0)
+
+
+def legacy_initial_centroids(img_arr: np.ndarray, color_count: int) -> np.ndarray:
+    """Freeze the original RGB-pixel algorithm as an independent regression oracle."""
+    img = (
+        Image.fromarray(img_arr)
+        .quantize(color_count, method=Image.Quantize.FASTOCTREE)
+        .convert("RGB")
+    )
+    pixels = np.asarray(img)
+    return np.unique(pixels.reshape(-1, pixels.shape[-1]), axis=0).astype(np.uint8)
+
+
+@pytest.mark.parametrize("color_count", [2, 6, 16, 64])
+@pytest.mark.parametrize("seed", range(5))
+def test_initial_centroids_match_original(color_count: int, seed: int) -> None:
+    """Preserve exact dtype, values and ordering on random and sparse RGB inputs."""
+    rng = np.random.default_rng(seed)
+    noise = rng.integers(0, 256, size=(63, 67, 3), dtype=np.uint8)
+    for pixels in (
+        noise,
+        noise[::2, ::2],  # Non-contiguous input.
+        noise[:1, :1],  # Only one used palette entry.
+        np.full_like(noise, (175, 80, 230)),  # Unused black entries must be ignored.
+        (noise // 128) * 128,  # Fewer distinct colors than some requests.
+    ):
+        expected = legacy_initial_centroids(pixels, color_count)
+        actual = color_quantize.get_initial_centroids(pixels, color_count)
+        np.testing.assert_equal(actual.dtype, expected.dtype)
+        np.testing.assert_equal(actual.dtype, np.dtype(np.uint8))
+        np.testing.assert_array_equal(actual, expected)
+
+
+def test_initial_centroids_ignore_unused_and_duplicate_palette_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep only used RGB colors, deduplicated and sorted rather than palette order."""
+    indexed = Image.new("P", (3, 1))
+    indexed.putdata([7, 3, 5])
+    palette = np.zeros((256, 3), dtype=np.uint8)
+    palette[1] = (255, 0, 0)  # Unused nonblack entry.
+    palette[3] = palette[7] = (90, 10, 20)  # Duplicate used RGB entries.
+    palette[5] = (10, 20, 30)
+    indexed.putpalette(palette.ravel().tolist())
+    with monkeypatch.context() as patch:
+        patch.setattr(Image.Image, "quantize", lambda *args, **kwargs: indexed)
+        pixels = np.zeros((1, 3, 3), dtype=np.uint8)
+        actual = color_quantize.get_initial_centroids(pixels, 64)
+        expected = legacy_initial_centroids(pixels, 64)
+    np.testing.assert_array_equal(actual, expected)
+    np.testing.assert_array_equal(actual, [[10, 20, 30], [90, 10, 20]])
+
+
+@pytest.mark.parametrize(
+    "image_name, color_count",
+    [
+        ("bubbles.png", 5),
+        ("shapes_2.png", 7),
+        ("aftermath.png", 2),
+        ("aftermath.png", 6),
+        ("aftermath.png", 16),
+        ("aftermath.png", 64),
+        ("empty.png", 6),
+        ("1px.jpg", 9),
+    ],
+)
+def test_centroid_optimization_preserves_vectorization(
+    image_name: str,
+    color_count: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Compare final SVG, colors, dimensions and bounds against the old algorithm."""
+    with Image.open(Path(__file__).parent / "images" / image_name) as image:
+        actual = ColorSolver(image, color_count, Timer()).solve()
+        monkeypatch.setattr(
+            color_quantize,
+            "get_initial_centroids",
+            legacy_initial_centroids,
+        )
+        expected = ColorSolver(image, color_count, Timer()).solve()
+
+    actual_paths, actual_colors, actual_width, actual_height = actual
+    expected_paths, expected_colors, expected_width, expected_height = expected
+    np.testing.assert_array_equal(actual_colors, expected_colors)
+    np.testing.assert_equal(
+        (actual_width, actual_height),
+        (expected_width, expected_height),
+    )
+    np.testing.assert_equal(
+        compound_paths_bounds(actual_paths),
+        compound_paths_bounds(expected_paths),
+    )
+    # Byte-identical SVG is stricter than a raster tolerance and includes transparency.
+    np.testing.assert_equal(
+        generate_SVG_markup(*actual),
+        generate_SVG_markup(*expected),
+    )
 
 
 def test_uploads_markup_to_s3(client):
