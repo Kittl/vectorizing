@@ -1,8 +1,8 @@
 import numpy as np
 import potrace
 
-from vectorizing.solvers.color.bitmaps import create_bitmaps
-from vectorizing.solvers.color.clip import remove_layering
+from vectorizing.geometry.potrace import potrace_path_to_compound_path
+from vectorizing.solvers.color.bitmaps import add_bitmap_rims, create_bitmaps
 from vectorizing.solvers.color.quantize import quantize
 from vectorizing.util.limit_size import limit_size
 
@@ -28,15 +28,16 @@ class ColorSolver:
 
         self.timer.start_timer("Bitmap Creation")
         bitmaps, colors = create_bitmaps(labels, colors, has_background)
+        add_bitmap_rims(bitmaps)
         self.timer.end_timer()
 
         self.timer.start_timer("Bitmap Tracing")
         traced_bitmaps = [potrace.Bitmap(bitmap).trace() for bitmap in bitmaps]
         self.timer.end_timer()
 
-        self.timer.start_timer("Polygon Clipping")
-        compound_paths = remove_layering(traced_bitmaps, self.img, has_background)
-        self.timer.end_timer()
+        compound_paths = [
+            potrace_path_to_compound_path(traced) for traced in traced_bitmaps
+        ]
 
         return [compound_paths, colors, self.img.size[0], self.img.size[1]]
 
