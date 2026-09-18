@@ -1,7 +1,8 @@
+"""Create separate local application and test buckets if they do not exist."""
+
 import os
 
 import boto3
-
 
 s3 = boto3.client("s3", endpoint_url=os.environ["AWS_ENDPOINT_URL"])
 existing = {bucket["Name"] for bucket in s3.list_buckets()["Buckets"]}
