@@ -40,7 +40,7 @@ The first time the execution can take few minutes, as it is pulling the dev cont
 
 	This will compile dependencies and environments, ensuring a consistent development workflow and deployment.
 
-4. If you want to add or remove **system** dependencies, update the script: [`scripts/install_system_dependencies.sh`](scripts/install_system_dependencies.sh). This is used both in CI and at dev container creation, to keep them consistent.
+4. If you want to add or remove **system** dependencies, update the shared script: [`scripts/install_system_dependencies.sh`](scripts/install_system_dependencies.sh). It is used by the production Docker image and at dev container creation, to keep them consistent. The Compose test image uses development Python requirements and mounts `vectorizing/tests/` at runtime because test sources are excluded from the production build context.
 
 ## Linting and formatting
 
@@ -74,12 +74,16 @@ python scripts/benchmark_vectorization.py --output .user/benchmark.json --case a
 - Add `--baseline-root /path/to/baseline` to benchmark two trusted checkouts in alternating order, with exact-output checks. `--repeats` defaults to 3 and `--warmups` to 1 per process. Output mismatches exit `1` but still save the report; timings have no pass/fail threshold.
 - Reports include runtime/source fingerprints and raw samples. `--label` can record commit IDs. Checkouts share the installed dependencies; this is not a dependency-isolated or production/concurrency benchmark. Use only trusted source roots.
 
-For Docker, build the current scripts and mount only the output directory:
+For Docker, build the current scripts with development dependencies and mount the
+fixture images and output directory:
 
 ```bash
 mkdir -p .user
-docker build -t vectorizing:tools .
-docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/.user:/results" vectorizing:tools \
+docker build --build-arg REQUIREMENTS_FILE=dev.txt -t vectorizing:tools .
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v "$PWD/.user:/results" \
+  -v "$PWD/vectorizing/tests/images:/app/vectorizing/tests/images:ro" \
+  vectorizing:tools \
   python scripts/vectorization_outputs.py capture /results/candidate
 ```
 
