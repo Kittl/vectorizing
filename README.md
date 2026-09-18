@@ -90,6 +90,11 @@ A typical response would be
 
 Or, if `raw = true` was supplied, just plain SVG markup
 
+Color layers have cutouts with a small overlap along shared edges to hide seams.
+The overlap is two pixels in the resized image before tracing, not screen pixels.
+Hiding a color can expose this rim; very thin features may remain covered, and
+zooming in makes the rim larger. No SVG strokes are added.
+
 ## Testing
 
 Tests work on rasterized versions of vectorized markup. i.e

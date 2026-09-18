@@ -2,7 +2,7 @@ import numpy as np
 import potrace
 
 from vectorizing.geometry.potrace import potrace_path_to_compound_path
-from vectorizing.solvers.color.bitmaps import create_bitmaps
+from vectorizing.solvers.color.bitmaps import add_bitmap_rims, create_bitmaps
 from vectorizing.solvers.color.quantize import quantize
 from vectorizing.util.limit_size import limit_size
 
@@ -28,6 +28,7 @@ class ColorSolver:
 
         self.timer.start_timer("Bitmap Creation")
         bitmaps, colors = create_bitmaps(labels, colors, has_background)
+        add_bitmap_rims(bitmaps)
         self.timer.end_timer()
 
         self.timer.start_timer("Bitmap Tracing")

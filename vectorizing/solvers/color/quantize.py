@@ -145,23 +145,21 @@ def write_background_cluster(labels, bg_cluster):
     labels = np.where(bg_cluster > 0, 0, labels)
     return labels
 
-# Gets initial centroids for kmeans clustering
-# by quantizing an image using FASTOCTREE method
-def get_initial_centroids(img_arr, color_count):
+
+def get_initial_centroids(img_arr: np.ndarray, color_count: int) -> np.ndarray:
+    """Return sorted unique used RGB palette colors for K-means initialization."""
     img = Image.fromarray(img_arr)
 
-    img = img.quantize(
-        color_count, 
-        method = Image.Quantize.FASTOCTREE
-    ).convert('RGB')
+    img = img.quantize(color_count, method=Image.Quantize.FASTOCTREE)
 
-    img_arr = np.asarray(img)
-    channel_count = img_arr.shape[-1]
+    # Ignore unused entries: palette padding must not add extra K-means clusters.
+    # Keep np.unique's RGB order and deduplication, but sort only the used palette
+    # rather than every pixel. Centroid order affects K-means results.
+    # quantize() returns mode P: at most 256 entries, within getcolors()'s cap.
+    used_indices = [index for _, index in img.getcolors()]
+    palette = np.asarray(img.getpalette("RGB"), dtype=np.uint8).reshape(-1, 3)
+    return np.unique(palette[used_indices], axis=0)
 
-    return np.unique(
-        np.reshape(img_arr, (-1, channel_count)),
-        axis = 0
-    ).astype(np.uint8)
 
 def kmeans(img_arr, init_centroids):
     channel_count = img_arr.shape[-1]
