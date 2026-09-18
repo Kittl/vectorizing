@@ -1,4 +1,4 @@
-"""Check editable layer geometry, not only the fully assembled picture."""
+"""Tests for holes left by deleted or transparent color layers."""
 
 from io import BytesIO
 from unittest.mock import Mock
@@ -18,7 +18,7 @@ def nested_layers(
     monkeypatch: pytest.MonkeyPatch,
     transparent: bool,
 ) -> tuple[list[Path], list[np.ndarray]]:
-    """Trace three known nested colors, optionally inside a transparent border."""
+    """Trace three nested color regions with an optional transparent border."""
     labels = np.zeros((40, 40), dtype=np.uint8)
     colors = [[220, 40, 40, 255], [40, 180, 40, 255], [40, 40, 220, 255]]
     offset = int(transparent)
@@ -40,7 +40,7 @@ def nested_layers(
 
 
 def render_layers(paths: list[Path], colors: list[np.ndarray]) -> np.ndarray:
-    """Render transparent RGBA pixels without a background hiding alpha defects."""
+    """Render SVG paths as RGBA pixels."""
     markup = generate_SVG_markup(paths, colors, 40, 40)
     np.testing.assert_equal("stroke=" in markup, False)
     return np.asarray(Image.open(BytesIO(svg2png(bytestring=markup))).convert("RGBA"))
@@ -55,9 +55,9 @@ def test_editing_a_layer_leaves_a_hole(
     layer: int,
     operation: str,
 ) -> None:
-    """Deleting or fading any color must not reveal a solid lower-color layer."""
+    """Verify layer edits expose transparency without changing other regions."""
     paths, colors = nested_layers(monkeypatch, transparent)
-    # Sample well inside each region, away from anti-aliasing or a future thin rim.
+    # Sample region interiors, away from anti-aliased boundaries.
     samples = [(20, 7), (20, 12), (20, 20)]
     original = render_layers(paths, colors)
     for point in samples:

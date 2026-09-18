@@ -1,4 +1,4 @@
-"""Restore the pre-overlap layer clipping, including its legacy error fallback."""
+"""Cut overlapping color paths into separate regions."""
 
 import potrace
 from pathops import Path, PathOp, PathOpsError, op
@@ -23,9 +23,7 @@ def remove_layering(
     img: Image.Image,
     has_background: bool,
 ) -> list[Path]:
-    """Cut later colors out of lower layers using the original clipping routine."""
-    # Preserve the original PathOps-error fallback for this rollback. Complex
-    # paths can still retain overlap if clipping fails; shared edges can seam.
+    """Subtract later colors from lower layers, retaining overlap if clipping fails."""
     compound_paths = [
         potrace_path_to_compound_path(traced) for traced in traced_bitmaps
     ]
@@ -43,8 +41,7 @@ def remove_layering(
 
     disjoint_paths = []
     for index in range(len(compound_paths) - 1):
-        # The old routine uses successively padded rectangles, then clips back
-        # to the image bounds. Keep that behavior separate from the rim change.
+        # Different padding keeps the rectangles' outer edges from coinciding.
         base = create_background_rect(img, (index + 1) * 10)
         to_subtract = Path()
         for previous in disjoint_paths:
@@ -56,6 +53,7 @@ def remove_layering(
             break
         disjoint_paths.append(result)
 
+    # Remove the padding from each clipped layer.
     for index, path in enumerate(disjoint_paths):
         try:
             disjoint_paths[index] = op(
