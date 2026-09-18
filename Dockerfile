@@ -1,10 +1,17 @@
 # Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
-# Install system dependencies shared with the development container.
-COPY scripts/install_system_dependencies.sh /tmp/install_system_dependencies.sh
-RUN bash /tmp/install_system_dependencies.sh && \
-    rm /tmp/install_system_dependencies.sh && \
+# Install necessary packages
+RUN apt-get update -y && apt-get install -y \
+    wget \
+    build-essential \
+    python3-dev \
+    libagg-dev \
+    libpotrace-dev \
+    pkg-config \
+    libgl1 \
+    libcairo2 \
+    --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and group with specific IDs for consistency
@@ -14,10 +21,8 @@ RUN addgroup --gid 1001 appuser && \
 # Set the working directory
 WORKDIR /app
 
-# Copy only requirements to leverage Docker cache. The test Compose service
-# overrides this with the development requirements.
-ARG REQUIREMENTS_FILE=prod.txt
-COPY requirements/${REQUIREMENTS_FILE} /app/requirements.txt
+# Copy only requirements to leverage Docker cache
+COPY requirements/dev.txt /app/requirements.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r /app/requirements.txt
