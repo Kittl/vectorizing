@@ -1,5 +1,6 @@
 """Build overlapping color masks for Potrace tracing."""
 
+import cv2
 import numpy as np
 
 
@@ -26,3 +27,22 @@ def create_bitmaps(
         bitmaps[index] += bitmaps[index + 1]
 
     return bitmaps, retained_colors
+
+
+def add_bitmap_rims(bitmaps: list[np.ndarray]) -> None:
+    """Replace cumulative masks in place with cutouts plus two-pixel inner rims."""
+    # One pixel still leaves gaps after curve fitting on the artwork fixtures.
+    # This is in processed-image pixels, not screen pixels: zoom enlarges the
+    # lip, and features at most four pixels wide may be covered by neighboring rims.
+    kernel = np.ones((5, 5), dtype=np.uint8)
+    # Work forwards while the next mask is still cumulative. Dilation adds only
+    # neighboring pixels; clipping to this mask excludes earlier colors and
+    # transparent space. The last mask already contains just its own color.
+    for bitmap, above in zip(bitmaps, bitmaps[1:]):
+        visible = (bitmap > above).astype(np.uint8)
+        bitmap &= cv2.dilate(
+            visible,
+            kernel,
+            borderType=cv2.BORDER_CONSTANT,
+            borderValue=0,
+        )
