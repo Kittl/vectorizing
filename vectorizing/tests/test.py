@@ -1,3 +1,5 @@
+"""Check image rendering, storage and exact color-optimization equivalence."""
+
 import os
 from io import BytesIO
 from pathlib import Path
@@ -6,6 +8,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 from cairosvg import svg2png
+from flask.testing import FlaskClient
 from PIL import Image
 
 from vectorizing.geometry.bounds import compound_paths_bounds
@@ -27,12 +30,8 @@ from vectorizing.tests.testutil import (
 )
 
 
-def test(client):
-    """
-    Tests all images inside /images directory using the TESTS object
-    in config.py
-    """
-
+def test(client: FlaskClient) -> None:
+    """Render the configured gallery and compare or seed its local PNG baselines."""
     results_path = Path(RESULTS_FOLDER_PATH)
 
     # Create results folder if non-existent
@@ -79,7 +78,11 @@ def test(client):
     assert all([diff <= MAX_IMAGE_DIFFERENCE for diff in diffs])
 
 
-def test_write_img_difference_handles_rgba_baselines(tmp_path, monkeypatch):
+def test_write_img_difference_handles_rgba_baselines(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Normalize transparent baseline pixels before computing RGB differences."""
     baseline = tmp_path / "baseline.png"
     output = tmp_path / "difference.png"
     Image.new("RGBA", (2, 2), (0, 0, 0, 0)).save(baseline)
@@ -94,7 +97,8 @@ def test_write_img_difference_handles_rgba_baselines(tmp_path, monkeypatch):
     assert output.exists()
 
 
-def test_color_solver_preserves_empty_transparent_image():
+def test_color_solver_preserves_empty_transparent_image() -> None:
+    """Keep every rendered pixel transparent for an empty input image."""
     image = Image.open(Path(__file__).parent / "images" / "empty.png")
     paths, colors, width, height = ColorSolver(image, 6, Timer()).solve()
     markup = generate_SVG_markup(paths, colors, width, height)
@@ -319,7 +323,8 @@ def test_color_optimizations_preserve_vectorization(
     )
 
 
-def test_uploads_markup_to_s3(client):
+def test_uploads_markup_to_s3(client: FlaskClient) -> None:
+    """Store the generated SVG with its media type and return the object's key."""
     response = client.post(
         "/",
         json={

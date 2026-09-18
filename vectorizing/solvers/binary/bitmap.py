@@ -1,9 +1,11 @@
+"""Prepare foreground masks for monochrome tracing."""
+
 import cv2
 import numpy as np
 
 
-# Inverts an image
-def invert(img_arr):
+def invert(img_arr: np.ndarray) -> np.ndarray:
+    """Invert RGB channels while leaving any alpha channel unchanged."""
     channel_count = img_arr.shape[-1]
 
     if channel_count == 4:
@@ -16,10 +18,8 @@ def invert(img_arr):
     return 255 - img_arr
 
 
-# Blends a transparent image with a white background by
-# interpolating linearly. In the end, an RGBA image
-# is turned into RGB
-def alpha_blend(img_arr):
+def alpha_blend(img_arr: np.ndarray) -> np.ndarray:
+    """Composite uint8 RGBA pixels over white and return uint8 RGB pixels."""
     r, g, b, a = cv2.split(img_arr)
     n_alpha = a / 255
 
@@ -30,8 +30,8 @@ def alpha_blend(img_arr):
     return cv2.merge((r, g, b)).astype(np.uint8)
 
 
-# Compute threshold
-def threshold(img_arr):
+def threshold(img_arr: np.ndarray) -> np.ndarray:
+    """Apply Otsu thresholding, marking dark pixels as foreground."""
     channel_count = img_arr.shape[-1]
 
     if channel_count == 4:
@@ -46,11 +46,11 @@ def threshold(img_arr):
     return np.where(thresholded >= 128, 0, 1)
 
 
-# Creates bitmap to be traced by potrace
-# This deals with a very common edge case: when an image has a transparent
-# background and a white foreground, the alpha blend strips all information, so in
-# that case we choose the inverted version
-def compute_bitmap(img_arr, foreground_area_threshold=0.01):
+def compute_bitmap(
+    img_arr: np.ndarray,
+    foreground_area_threshold: float = 0.01,
+) -> np.ndarray:
+    """Select a foreground mask, falling back to a solid mask when it is empty."""
     # compute bitmap
     bitmap = threshold(img_arr)
     foreground_area = np.sum(bitmap)

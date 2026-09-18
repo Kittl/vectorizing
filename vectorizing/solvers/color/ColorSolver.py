@@ -1,14 +1,21 @@
+"""Trace editable color layers with bounded overlap at shared edges."""
+
 import numpy as np
 import potrace
+from pathops import Path
+from PIL import Image
 
 from vectorizing.geometry.potrace import potrace_path_to_compound_path
+from vectorizing.server.timer import Timer
 from vectorizing.solvers.color.bitmaps import add_bitmap_rims, create_bitmaps
 from vectorizing.solvers.color.quantize import quantize
 from vectorizing.util.limit_size import limit_size
 
 
 class ColorSolver:
-    def __init__(self, img, color_count, timer):
+    """Resize and quantize an image, then trace its ordered color layers."""
+
+    def __init__(self, img: Image.Image, color_count: int | None, timer: Timer) -> None:
         color_count = color_count or ColorSolver.DEFAULT_COLOR_COUNT
         color_count = max(color_count, ColorSolver.MIN_COLOR_COUNT)
         color_count = min(color_count, ColorSolver.MAX_COLOR_COUNT)
@@ -21,7 +28,8 @@ class ColorSolver:
 
         self.timer = timer
 
-    def solve(self):
+    def solve(self) -> list[list[Path] | list[np.ndarray] | int]:
+        """Return paths, colors, width and height as a list."""
         self.timer.start_timer("Quantization")
         labels, colors, has_background = quantize(self.img_arr, self.color_count)
         self.timer.end_timer()

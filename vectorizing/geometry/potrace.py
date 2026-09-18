@@ -1,19 +1,11 @@
-import numpy as np
-from pathops import Path, FillType
+"""Convert Potrace curves into paths suitable for SVG serialization."""
+
+import potrace
+from pathops import FillType, Path
 
 
-def potrace_path_to_compound_path(potrace_path):
-    """
-    Converts a potrace path into an SKPath.
-    This conversion is needed to later perform boolean operations
-    on compound paths.
-
-            Parameters:
-                    potrace_path: The potrace path
-
-            Returns:
-                    The SKPath
-    """
+def potrace_path_to_compound_path(potrace_path: potrace.Path) -> Path:
+    """Convert Potrace curves to an even-odd path of lines and cubic Beziers."""
     compound_path = Path(fillType=FillType.EVEN_ODD)
 
     for potrace_curve in potrace_path:
