@@ -18,4 +18,6 @@ fi
   libpotrace-dev \
   pkg-config \
   libgl1 \
-  libcairo2
+  libcairo2 \
+  libffi-dev \
+  libcairo2-dev

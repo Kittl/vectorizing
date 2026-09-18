@@ -58,8 +58,6 @@ services:
       <<: *local-aws
     volumes:
       - ./vectorizing/tests:/app/vectorizing/tests
-      - ./vectorizing/tests/results:/app/vectorizing/tests/results
-      - ./vectorizing/tests/diff_output:/app/vectorizing/tests/diff_output
     depends_on:
       moto-init:
         condition: service_completed_successfully
