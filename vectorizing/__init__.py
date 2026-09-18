@@ -130,7 +130,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             timer.end_timer()
 
             if raw:
-                return markup
+                return Response(markup, mimetype="image/svg+xml")
 
             timer.start_timer("Markup Upload")
             cuid_str = upload_markup(markup, S3_BUCKET)
