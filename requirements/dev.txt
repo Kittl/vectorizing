@@ -54,10 +54,6 @@ faiss-cpu==1.7.4
 filelock==3.18.0
     # via virtualenv
 flask==2.3.3
-    # via
-    #   -r /workspaces/vectorizing/requirements/prod.txt
-    #   flask-cors
-flask-cors==4.0.2
     # via -r /workspaces/vectorizing/requirements/prod.txt
 gunicorn==21.2.0
     # via -r /workspaces/vectorizing/requirements/prod.txt
@@ -90,10 +86,6 @@ lazy-loader==0.4
     # via
     #   -r /workspaces/vectorizing/requirements/prod.txt
     #   scikit-image
-llvmlite==0.40.1
-    # via
-    #   -r /workspaces/vectorizing/requirements/prod.txt
-    #   numba
 markupsafe==3.0.2
     # via
     #   -r /workspaces/vectorizing/requirements/prod.txt
@@ -105,13 +97,10 @@ networkx==3.4.2
     #   scikit-image
 nodeenv==1.9.1
     # via pre-commit
-numba==0.57.1
-    # via -r /workspaces/vectorizing/requirements/prod.txt
 numpy==1.24.4
     # via
     #   -r /workspaces/vectorizing/requirements/prod.txt
     #   imageio
-    #   numba
     #   opencv-python-headless
     #   pypotrace
     #   pywavelets

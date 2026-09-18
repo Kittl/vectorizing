@@ -48,12 +48,16 @@ services:
 
   test:
     <<: *app
+    image: vectorizing:test
+    build:
+      context: .
+      args:
+        REQUIREMENTS_FILE: dev.txt
     profiles: [testing]
     environment:
       <<: *local-aws
     volumes:
-      - ./vectorizing/tests/results:/app/vectorizing/tests/results
-      - ./vectorizing/tests/diff_output:/app/vectorizing/tests/diff_output
+      - ./vectorizing/tests:/app/vectorizing/tests
     depends_on:
       moto-init:
         condition: service_completed_successfully

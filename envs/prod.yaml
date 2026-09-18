@@ -34,7 +34,6 @@ dependencies:
       - cuid==0.4
       - faiss-cpu==1.7.4
       - flask==2.3.3
-      - flask-cors==4.0.2
       - gunicorn==21.2.0
       - idna==3.10
       - imageio==2.37.0
@@ -42,10 +41,8 @@ dependencies:
       - jinja2==3.1.6
       - jmespath==1.0.1
       - lazy-loader==0.4
-      - llvmlite==0.40.1
       - markupsafe==3.0.2
       - networkx==3.4.2
-      - numba==0.57.1
       - numpy==1.24.4
       - opencv-python-headless==4.8.0.76
       - packaging==25.0

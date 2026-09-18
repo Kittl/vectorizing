@@ -1,6 +1,10 @@
 # Local reports, captures and scratch files
 .user/
 
+# Test sources are mounted into the Compose test container instead of shipped
+# in the production image.
+vectorizing/tests/
+
 ### Python template
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -164,7 +168,6 @@ cython_debug/
 .idea/
 
 # Other files
-heroku.yml
 docker-compose.yml
 .pre-commit-config.yaml
 .vscode/

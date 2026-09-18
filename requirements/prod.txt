@@ -25,10 +25,6 @@ cuid==0.4
 faiss-cpu==1.7.4
     # via -r /workspaces/vectorizing/scripts/../requirements/prod.in
 flask==2.3.3
-    # via
-    #   -r /workspaces/vectorizing/scripts/../requirements/prod.in
-    #   flask-cors
-flask-cors==4.0.2
     # via -r /workspaces/vectorizing/scripts/../requirements/prod.in
 gunicorn==21.2.0
     # via -r /workspaces/vectorizing/scripts/../requirements/prod.in
@@ -46,20 +42,15 @@ jmespath==1.0.1
     #   botocore
 lazy-loader==0.4
     # via scikit-image
-llvmlite==0.40.1
-    # via numba
 markupsafe==3.0.2
     # via
     #   jinja2
     #   werkzeug
 networkx==3.4.2
     # via scikit-image
-numba==0.57.1
-    # via -r /workspaces/vectorizing/scripts/../requirements/prod.in
 numpy==1.24.4
     # via
     #   imageio
-    #   numba
     #   opencv-python-headless
     #   pypotrace
     #   pywavelets
