@@ -41,7 +41,8 @@ def test_aftermath_retains_holes_when_layers_are_edited(
 
     rim_builder = Mock(side_effect=capture_foreground)
     monkeypatch.setattr(
-        "vectorizing.solvers.color.ColorSolver.add_bitmap_rims", rim_builder,
+        "vectorizing.solvers.color.ColorSolver.add_bitmap_rims",
+        rim_builder,
     )
     with Image.open(Path(__file__).parent / "images" / "aftermath.png") as image:
         paths, colors, width, height = ColorSolver(image, 16, Timer()).solve()

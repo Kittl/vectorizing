@@ -42,6 +42,20 @@ def test_bitmap_rims_match_a_bounded_neighbor_reference(
     np.testing.assert_array_equal(combined, labels != 0 if transparent else True)
 
 
+def test_bitmap_rims_do_not_cascade_through_later_colors() -> None:
+    """Keep distant colors out of lower masks when converting cumulative storage."""
+    # Dense random labels can hide a reversed loop: every color is nearby. Wide
+    # strips ensure that a modified upper mask cannot masquerade as this color.
+    labels = np.tile(np.repeat(np.arange(4), 10), (12, 1))
+    masks, _ = create_bitmaps(labels, np.zeros((4, 3)), False)
+    add_bitmap_rims(masks)
+    for index, mask in enumerate(masks):
+        expected = np.zeros_like(mask)
+        left, right = index * 10, min((index + 1) * 10 + 2, 40)
+        expected[:, left:right] = 1
+        np.testing.assert_array_equal(mask, expected)
+
+
 def test_bitmap_rims_handle_empty_input() -> None:
     """Leave empty artwork empty."""
     masks = []
