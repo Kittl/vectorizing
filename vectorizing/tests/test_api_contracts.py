@@ -84,6 +84,7 @@ def test_raw_requests_crop_before_vectorizing_and_do_not_upload(
         },
     )
     assert response.status_code == 200
+    assert response.mimetype == "image/svg+xml"
     assert response.data.startswith(b"<svg ")
     assert b'width="8" height="8"' in response.data
     chosen, unused = (binary, color) if solver == 0 else (color, binary)
