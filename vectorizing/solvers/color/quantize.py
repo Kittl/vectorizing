@@ -51,16 +51,21 @@ def enhance(
 
     # The boundary is fixed; reuse its complement for every color's area count.
     interior = ~boundary
+    del boundary, valid
     cleaned = np.zeros(img_arr.shape[:2], dtype=np.uint16 if len(colors) else np.uint8)
-    for index in range(len(colors)):
-        cluster = labels == index + 1
-        if not cluster.any():
+    # One scan finds every color's box, including all disconnected components.
+    # max_label excludes invalid labels; zero would instead infer the maximum.
+    regions = ndi.find_objects(labels, max_label=len(colors)) if len(colors) else []
+    for index, region in enumerate(regions):
+        if region is None:
             continue
+        cluster = labels[region] == index + 1
         # Keep full (8-neighbor) connectivity, including diagonal contacts.
         components = label(cluster, connectivity=2)
         original_counts = np.bincount(components.ravel())
         interior_counts = np.bincount(
-            components[interior],
+            # Slice the global mask: other colors outside the box still influence it.
+            components[interior[region]],
             minlength=len(original_counts),
         )
         areas_ratio = np.divide(
@@ -70,7 +75,7 @@ def enhance(
             where=original_counts != 0,
         )
         # Retain whole components, using the same float32, inclusive <=0.1 cutoff.
-        cleaned[cluster & (areas_ratio[components] > 0.1)] = index + 1
+        cleaned[region][cluster & (areas_ratio[components] > 0.1)] = index + 1
         # Release this map before allocating the next color's component map.
         del components
 
