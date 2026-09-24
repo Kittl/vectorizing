@@ -1,17 +1,13 @@
+"""Compute document bounds from traced vector paths."""
+
+from collections.abc import Iterable
+
 import numpy as np
+from pathops import Path
 
 
-# Calculates bounds of a list of compound paths
-def compound_paths_bounds(compound_paths):
-    """
-    Calculates the combined bounds of a list of compound paths.
-
-        Parameters:
-            compound_paths: The list of compound paths (SKPath).
-
-        Returns:
-            An object containing combined bounds info.
-    """
+def compound_paths_bounds(compound_paths: Iterable[Path]) -> dict[str, float]:
+    """Return combined bounds, retaining infinite extents for an empty iterable."""
     min_x = np.inf
     min_y = np.inf
     max_x = -np.inf

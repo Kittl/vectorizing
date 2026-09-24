@@ -1,7 +1,10 @@
+"""Support the image gallery with S3 fixtures and RGB difference images."""
+
 from pathlib import Path
 
 import cv2
 import numpy as np
+from flask.testing import FlaskClient
 from PIL import Image
 from sewar.full_ref import uqi
 
@@ -22,22 +25,8 @@ RESULTS_FOLDER_PATH = TESTS_FOLDER_PATH / "results"
 DIFF_OUTPUT_FOLDER_PATH = TESTS_FOLDER_PATH / "diff_output"
 
 
-def get_image_url(img_name):
-    """
-    Gets an image URL. Uploads it to the S3 testing bucket,
-    if not there already
-
-    Parameters
-    ----------
-    img_name : string
-        The name of the image. It is used as key for the upload.
-
-    Returns
-    -------
-    str
-        The URL of the image in the S3 bucket
-    """
-
+def get_image_url(img_name: str) -> str | None:
+    """Return a fixture's S3 URL, uploading the fixture if it is not present."""
     object_url = get_object_url(img_name, S3_TEST_BUCKET)
 
     if object_url:
@@ -46,24 +35,12 @@ def get_image_url(img_name):
     return upload_file(IMAGES_FOLDER_PATH / img_name, S3_TEST_BUCKET, img_name)
 
 
-def get_markup(client, img_name, request_params):
-    """
-    Vectorizes an image and returns the SVG markup
-
-    Parameters
-    ----------
-    client : Flask
-        A flask test client
-    img_name: string
-        The name of the image
-    request_params:
-        Parameters for the vectorize request
-
-    Returns
-    -------
-    str
-        SVG markup
-    """
+def get_markup(
+    client: FlaskClient,
+    img_name: str,
+    request_params: dict[str, object],
+) -> bytes:
+    """Vectorize an S3 fixture through the HTTP API and return raw response bytes."""
     image_url = get_image_url(img_name)
 
     request_params = {
@@ -75,26 +52,12 @@ def get_markup(client, img_name, request_params):
     return client.post("/", json=request_params).data
 
 
-def compute_img_difference(img, expected_img_path, small_image_test_factor=0.1):
-    """
-    Computes difference between two images using UQI
-
-    Parameters
-    ----------
-    img : PIL.Image
-        An image
-    expected_img_path:
-        A path to a baseline image to compare [img] with
-
-    Both images are assumed to have the same size
-
-    Returns
-    -------
-    float
-        A number between 0 and 1.
-        0 means equal
-        1 means completely different
-    """
+def compute_img_difference(
+    img: Image.Image,
+    expected_img_path: Path,
+    small_image_test_factor: float = 0.1,
+) -> float:
+    """Compare equal-sized RGB images with UQI or a small-image pixel threshold."""
     expected_img = try_read_image_from_path(expected_img_path).convert("RGB")
     expected_img_arr = np.asarray(expected_img).astype(np.uint8)
     img_arr = np.asarray(img.convert("RGB")).astype(np.uint8)
@@ -104,8 +67,7 @@ def compute_img_difference(img, expected_img_path, small_image_test_factor=0.1):
     if px_count <= MIN_UQI_PIXEL_COUNT:
         # For very small images, uqi sometimes returns nan
 
-        # We then use a simple metric for these cases, we also don't particularly care too
-        # much about such small images
+        # Use a pixel-count threshold instead of UQI for these small images.
 
         diff = img_arr - expected_img_arr
         norm = np.linalg.norm(diff, axis=2)
@@ -128,26 +90,8 @@ def compute_img_difference(img, expected_img_path, small_image_test_factor=0.1):
     return 1 - image_quality_index
 
 
-def convert_to_RGBGray(img_arr):
-    """
-    Converts an image's colors to grayscale, and returns it
-    in RGB format. This is useful because to write image diffs,
-    we display the baseline image in gray to be able to have an
-    always-contrasting highlight color.
-
-    This highlight color shouldn't be a shade of gray though,
-    so a luminance image is not enough. RGB is needed.
-
-    Parameters
-    ----------
-    img_arr : np.array
-        An image array
-
-    Returns
-    -------
-    np.array
-        The converted image
-    """
+def convert_to_RGBGray(img_arr: np.ndarray) -> np.ndarray:
+    """Return RGB grayscale pixels, compositing RGBA inputs over white."""
     if img_arr.shape[-1] == 4:
         img_arr = alpha_blend(img_arr)
     img_arr = cv2.cvtColor(img_arr, cv2.COLOR_RGB2GRAY)
@@ -155,19 +99,12 @@ def convert_to_RGBGray(img_arr):
     return img_arr
 
 
-def write_img_difference(predicted_img, expected_img_path, output_name):
-    """
-    Writes difference between two images to /diff_output
-
-    Parameters
-    ----------
-    predicted_img : PIL.Image
-        The predicted image
-    expected_img_path: string
-        A path to the expected, or baseline, image
-    output_name:
-        The name of the file to be placed in diff_output
-    """
+def write_img_difference(
+    predicted_img: Image.Image,
+    expected_img_path: Path,
+    output_name: str,
+) -> None:
+    """Write a grayscale baseline with red highlights proportional to pixel error."""
     expected_img = try_read_image_from_path(expected_img_path).convert("RGB")
 
     predicted_img_arr = np.asarray(predicted_img.convert("RGB")).astype(np.uint8)

@@ -1,12 +1,16 @@
+"""Provide an HTTP client isolated from the application's S3 bucket."""
+
 import os
 
 import pytest
+from flask.testing import FlaskClient
 
 import vectorizing
 
 
 @pytest.fixture()
-def client(monkeypatch):
+def client(monkeypatch: pytest.MonkeyPatch) -> FlaskClient:
+    """Route test uploads to a required, separate bucket and enable Flask testing."""
     test_bucket = os.getenv("S3_TEST_BUCKET")
     if not test_bucket:
         pytest.fail("S3_TEST_BUCKET must be set")

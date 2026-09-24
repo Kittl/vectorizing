@@ -16,7 +16,12 @@ extend-ignore = [
     'I100',
     'I101',
     'I202',
+    # Black controls whitespace in complex slices.
+    'E203',
+    # The containing class already determines the type of self.
+    'ANN101',
 ]
+per-file-ignores = ['vectorizing/tests/*:S101']
 import-order-style = "google"
 docstring-convention = "numpy"
 strictness = "short"

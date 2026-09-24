@@ -57,4 +57,4 @@ services:
     depends_on:
       moto-init:
         condition: service_completed_successfully
-    command: python -m pytest vectorizing/tests
+    command: python -m pytest

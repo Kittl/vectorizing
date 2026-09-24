@@ -53,6 +53,39 @@ pre-commit run --all-files
 The first execution might take a bit longer, as it will set up the virtual environment
 where the linter and the formatter will run.
 
+## Output comparisons and benchmarks
+
+These developer commands use local fixtures and need no AWS credentials or Moto.
+Run them in the dev container or an environment with `requirements/dev.txt` and
+its system libraries installed. They do not change application code or dependencies.
+
+Capture each version into a different directory, then compare:
+
+```bash
+python scripts/vectorization_outputs.py capture .user/before --source-root /path/to/baseline
+python scripts/vectorization_outputs.py capture .user/after
+python scripts/vectorization_outputs.py compare .user/before .user/after
+python scripts/benchmark_vectorization.py --output .user/benchmark.json --case aftermath-16
+```
+
+- Repeat `--case` to select fixtures; `--help` lists them. The default is all 15 cases.
+- Comparison checks SVG bytes, decoded RGBA pixels, colors, dimensions, bounds and input identity. Exit codes: `0` equal, `1` changed, `2` invalid/incomplete artifacts. Nonempty output directories and existing benchmark reports are never overwritten.
+- Benchmark timing covers the solver, SVG serialization and bounds, not file decoding, HTTP/S3 or rasterization. Each sample uses a fresh process; peak RSS includes imports, input preparation, warmups and output checks. Linux and macOS memory units are normalized to MiB.
+- Add `--baseline-root /path/to/baseline` to benchmark two trusted checkouts in alternating order, with exact-output checks. `--repeats` defaults to 3 and `--warmups` to 1 per process. Output mismatches exit `1` but still save the report; timings have no pass/fail threshold.
+- Reports include runtime/source fingerprints and raw samples. `--label` can record commit IDs. Checkouts share the installed dependencies; this is not a dependency-isolated or production/concurrency benchmark. Use only trusted source roots.
+
+For Docker, build the current scripts and mount only the output directory:
+
+```bash
+mkdir -p .user
+docker build -t vectorizing:tools .
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/.user:/results" vectorizing:tools \
+  python scripts/vectorization_outputs.py capture /results/candidate
+```
+
+A separate baseline checkout must also be mounted when using `--source-root` or
+`--baseline-root`. Generated artifacts under `.user/` are excluded from Git and Docker builds.
+
 ## Server
 
 The server has a single endpoint that receives `POST` requests.
@@ -110,6 +143,9 @@ To run tests against the local Moto service, run:
 ```
 docker compose --profile testing run --build --rm test
 ```
+
+Tests are split into `test_*.py` files in `vectorizing/tests`. Compose and CI
+run them all. `color_reference.py` keeps the old code for before/after checks.
 
 When running pytest outside Compose, configure the AWS variables for an S3-compatible service first.
 
