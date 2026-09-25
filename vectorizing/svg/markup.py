@@ -3,7 +3,7 @@
 from collections.abc import Iterable, Sequence
 
 import numpy as np
-from pathops import Path
+from pathops import Path, PathVerb
 
 Point = tuple[int, int]
 Command = tuple[str, tuple[int, ...]]
@@ -79,8 +79,10 @@ def _path_data(path: Path, width: int, height: int) -> str:
     current = start = (0, 0)
     control = None
     previous = ""
-    for kind, coordinates in path.segments:
-        if kind == "closePath":
+    # The segment-pen interface coalesces adjacent quadratics with implied
+    # endpoints. Raw verbs expose each control/end pair required by SVG Q/q.
+    for kind, coordinates in path:
+        if kind == PathVerb.CLOSE:
             pieces.append("z")
             current = start
             control = None
@@ -88,10 +90,10 @@ def _path_data(path: Path, width: int, height: int) -> str:
             continue
         # Canvas clipping can reduce a cubic to a quadratic; retain those too.
         command = {
-            "moveTo": "M",
-            "lineTo": "L",
-            "curveTo": "C",
-            "qCurveTo": "Q",
+            PathVerb.MOVE: "M",
+            PathVerb.LINE: "L",
+            PathVerb.CUBIC: "C",
+            PathVerb.QUAD: "Q",
         }[kind]
         points = tuple(_point(point) for point in coordinates)
         variants = _variants(command, points, current, control)

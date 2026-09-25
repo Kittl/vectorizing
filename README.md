@@ -132,7 +132,11 @@ color. Tracing retains small paths and uses a curve optimization tolerance of 0.
 The existing 1,048,576-pixel area cap, default of six
 colors and supported range of 2–64 colors are unchanged. Color paths touching the
 canvas are extended before tracing and clipped back to the image so corners remain
-covered and returned bounds do not include the padding.
+covered and returned bounds do not include the padding. If Skia rejects a canvas
+clip, that layer is retraced without padding and a warning is logged. Recovery
+constrains any outlying curve control points to the canvas. It keeps smooth editable
+vectors instead of failing the request, but can adjust curves near the canvas and
+round corners inward, reducing edge coverage on the affected layer.
 
 SVGs use compact absolute/relative commands on an integer hundredth-pixel grid,
 inside a `scale(.01)` group. This preserves the previous two-decimal coordinate

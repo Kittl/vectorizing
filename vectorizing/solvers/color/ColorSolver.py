@@ -1,8 +1,10 @@
 """Trace editable color layers with bounded overlap at shared edges."""
 
+import logging
+
 import numpy as np
 import potrace
-from pathops import Path, PathOp, op
+from pathops import Path, PathOp, PathOpsError, op
 from PIL import Image
 
 from vectorizing.geometry.potrace import potrace_path_to_compound_path
@@ -12,14 +14,20 @@ from vectorizing.solvers.color.quantize import quantize
 from vectorizing.util.limit_size import limit_size
 
 
+def _trace_mask(bitmap: np.ndarray) -> Path:
+    """Trace a mask with the same detail settings on normal and recovery paths."""
+    traced = potrace.Bitmap(bitmap).trace(turdsize=0, opttolerance=0.5, alphamax=1)
+    return potrace_path_to_compound_path(traced)
+
+
 def trace_bitmap(bitmap: np.ndarray) -> Path:
     """Trace detail without speck removal, extending then clipping canvas edges."""
     height, width = bitmap.shape
     # Potrace rounds exposed mask corners. Extending edge labels moves that
     # rounding outside the viewport instead of leaving transparent canvas corners.
-    padded = np.pad(bitmap.astype(np.uint8), 2, mode="edge")
-    traced = potrace.Bitmap(padded).trace(turdsize=0, opttolerance=0.5, alphamax=1)
-    path = potrace_path_to_compound_path(traced).transform(1, 0, 0, 1, -2, -2)
+    mask = bitmap.astype(np.uint8)
+    padded = np.pad(mask, 2, mode="edge")
+    path = _trace_mask(padded).transform(1, 0, 0, 1, -2, -2)
     left, top, right, bottom = path.bounds
     if left < 0 or top < 0 or right > width or bottom > height:
         # Keep returned geometry/bounds inside the image, not just the SVG's
@@ -30,7 +38,26 @@ def trace_bitmap(bitmap: np.ndarray) -> Path:
         canvas.lineTo(width, height)
         canvas.lineTo(0, height)
         canvas.close()
-        path = op(path, canvas, PathOp.INTERSECTION)
+        try:
+            path = op(path, canvas, PathOp.INTERSECTION)
+        except PathOpsError:
+            # Recovery keeps smooth, bounded vectors and does not repeat the
+            # failing boolean operation. Unpadded tracing can round canvas
+            # corners inward; only this exceptional layer loses edge coverage.
+            logging.getLogger(__name__).warning(
+                "Canvas clipping failed; retracing without padding",
+                exc_info=True,
+            )
+            traced = _trace_mask(mask)
+            path = Path(fillType=traced.fillType)
+            pen = path.getPen()
+            # Even unpadded fitted curves can overshoot the canvas. Constrain
+            # their control hull on recovery, without another boolean operation.
+            for command, points in traced.segments:
+                bounded = tuple(
+                    (min(width, max(0, x)), min(height, max(0, y))) for x, y in points
+                )
+                getattr(pen, command)(*bounded)
     return path
 
 

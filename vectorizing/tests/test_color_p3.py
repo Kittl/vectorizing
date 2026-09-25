@@ -4,15 +4,19 @@ import hashlib
 import json
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import Mock
 
 import cv2
 import numpy as np
 import pytest
 from cairosvg import svg2png
+from flask.testing import FlaskClient
+from pathops import PathOpsError
 from PIL import Image
 
 from vectorizing.geometry.bounds import compound_paths_bounds
 from vectorizing.server.timer import Timer
+from vectorizing.solvers.color.bitmaps import add_bitmap_rims
 from vectorizing.solvers.color.ColorSolver import ColorSolver, trace_bitmap
 from vectorizing.solvers.color.quantize import quantize
 from vectorizing.svg.markup import generate_SVG_markup
@@ -21,17 +25,37 @@ from vectorizing.tests.test_svg_geometry import expected_commands
 IMAGES = Path(__file__).parent / "images"
 
 
-def test_aftermath_matches_approved_p3_geometry() -> None:
-    """Match the independently captured approved P3 geometry, palette and size."""
+def test_aftermath_matches_approved_p3_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep approved masks, validated native geometry variants, palette and size."""
+    masks = []
+
+    def capture_rims(bitmaps: list[np.ndarray]) -> None:
+        add_bitmap_rims(bitmaps)
+        masks.extend(bitmap.astype(np.uint8).tobytes() for bitmap in bitmaps)
+
+    monkeypatch.setattr(
+        "vectorizing.solvers.color.ColorSolver.add_bitmap_rims",
+        capture_rims,
+    )
     with Image.open(IMAGES / "aftermath.png") as image:
         paths, colors, width, height = ColorSolver(image, 8, Timer()).solve()
-    # This digest was captured from the approved experimental SVG, before the
-    # production port, with absolute commands in integer hundredths of a pixel.
+    # Ordered masks are identical across ARM64 and x86_64. Native Potrace makes
+    # different curve-optimization decisions on those identical inputs. Both
+    # geometry captures were checked for coverage and composited render error;
+    # accept only those validated variants, not an arbitrary CI replacement.
+    assert hashlib.sha256(b"".join(masks)).hexdigest() == (
+        "e70cbf1c9d62e8ba853f6fa547975aac8311d9c44ac71decf14e9a6b2bf502bf"
+    )
     commands = [expected_commands(path) for path in paths]
     digest = hashlib.sha256(
         json.dumps(commands, separators=(",", ":")).encode(),
     ).hexdigest()
-    assert digest == "23d8c97dee23ea3f0b22d164d39f726f36ead7f2ce47048ca73326bf2731c7e8"
+    assert digest in {
+        "23d8c97dee23ea3f0b22d164d39f726f36ead7f2ce47048ca73326bf2731c7e8",  # ARM64
+        "1f52fe3d8589574cc561bf5ab0dff6a9ce410292d79b9e05dcf0a781f2d919f3",  # x86_64
+    }
     np.testing.assert_array_equal(
         np.asarray(colors)[:, :3],
         [
@@ -136,6 +160,61 @@ def test_canvas_padding_is_clipped_from_returned_paths() -> None:
     )
 
 
+@pytest.mark.parametrize("raw", [False, True])
+def test_clip_failure_retraces_bounded_vectors(
+    client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    raw: bool,
+) -> None:
+    """An exceptional clip failure still yields smooth vectors, holes and bounds."""
+    pixels = np.full((20, 32, 4), 255, dtype=np.uint8)
+    pixels[8:12, 14:18, 3] = 0
+    monkeypatch.setattr(
+        "vectorizing.try_read_image_from_url",
+        lambda url: Image.fromarray(pixels),
+    )
+    clip = Mock(side_effect=PathOpsError("injected failure"))
+    monkeypatch.setattr("vectorizing.solvers.color.ColorSolver.op", clip)
+    upload = Mock(return_value="fallback-svg")
+    monkeypatch.setattr("vectorizing.upload_markup", upload)
+    response = client.post("/", json={"url": "unused", "solver": 1, "raw": raw})
+    assert response.status_code == 200
+    clip.assert_called_once()
+    assert "retracing without padding" in caplog.text
+    if raw:
+        markup = response.data
+        upload.assert_not_called()
+    else:
+        upload.assert_called_once()
+        markup = upload.call_args.args[0]
+        bounds = response.get_json()["info"]["bounds"]
+        assert 0 <= bounds["left"] <= bounds["right"] <= 32
+        assert 0 <= bounds["top"] <= bounds["bottom"] <= 20
+    rendered = np.asarray(
+        Image.open(BytesIO(svg2png(bytestring=markup))).convert("RGBA"),
+    )
+    assert rendered[10, 16, 3] == 0
+    assert rendered[5, 5, 3] == 255
+
+
+def test_clip_recovery_constrains_curve_overshoot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unpadded curve fitting can still extend beyond the bitmap's control hull."""
+    rng = np.random.default_rng(6)
+    height, width = rng.integers(1, 45, 2)
+    mask = (rng.random((height, width)) < rng.uniform(0.03, 0.98)).astype(np.uint8)
+    clip = Mock(side_effect=PathOpsError("injected failure"))
+    monkeypatch.setattr("vectorizing.solvers.color.ColorSolver.op", clip)
+    path = trace_bitmap(mask)
+    clip.assert_called_once()
+    for _, points in path:
+        for x, y in points:
+            assert 0 <= x <= width
+            assert 0 <= y <= height
+
+
 def test_clipped_logo_preserves_opaque_canvas() -> None:
     """Keep coverage on a real clipped logo, including the canvas boundary."""
     with Image.open(IMAGES / "geo_logo.png") as image:
@@ -144,6 +223,22 @@ def test_clipped_logo_preserves_opaque_canvas() -> None:
     png = svg2png(bytestring=markup)
     pixels = np.asarray(Image.open(BytesIO(png)).convert("RGBA"))
     np.testing.assert_array_equal(pixels[:, :, 3], 255)
+
+
+def test_clipped_consecutive_quadratics_keep_opaque_coverage() -> None:
+    """Real clipping must not emit malformed Q commands that expose transparent gaps."""
+    rng = np.random.default_rng(513)
+    height, width = rng.integers(1, 45, 2)
+    mask = rng.random((height, width)) < rng.uniform(0.03, 0.98)
+    pixels = np.full((height, width, 3), 255, dtype=np.uint8)
+    pixels[mask] = [255, 0, 0]
+    result = ColorSolver(Image.fromarray(pixels), 2, Timer()).solve()
+    rendered = np.asarray(
+        Image.open(
+            BytesIO(svg2png(bytestring=generate_SVG_markup(*result))),
+        ).convert("RGBA"),
+    )
+    assert rendered[:, :, 3].min() >= 240
 
 
 def test_fully_transparent_image_has_no_foreground() -> None:

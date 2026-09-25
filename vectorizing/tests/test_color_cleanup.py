@@ -94,6 +94,17 @@ def test_background_selection_on_narrow_images(shape: tuple[int, int]) -> None:
     )
 
 
+@pytest.mark.parametrize("shape", [(1, 40_000), (40_000, 1)])
+def test_distant_holes_receive_a_surviving_color(shape: tuple[int, int]) -> None:
+    """The label propagation limit must not invent palette-zero survivors."""
+    labels = (np.arange(40_000) % 2).astype(np.uint16)
+    labels[-8:] = 2
+    labels = labels.reshape(shape)
+    original = labels.copy()
+    np.testing.assert_array_equal(clean_components(labels, None), 2)
+    np.testing.assert_array_equal(labels, original)
+
+
 def test_small_island_can_refill_from_transparent_background() -> None:
     """Remove tiny opaque specks without painting over transparent pixels."""
     labels = np.zeros((12, 12), dtype=np.uint16)

@@ -64,18 +64,32 @@ def decode_path(data: str) -> list[tuple[str, tuple[int, ...]]]:
 
 def expected_commands(path: Path) -> list[tuple[str, tuple[int, ...]]]:
     """Use decimal arithmetic on the original segments, not encoder helpers."""
-    return [
-        (
-            {
+    expanded = []
+    for kind, points in path.segments:
+        if kind == "qCurveTo":
+            # Independently expand the segment-pen's implied on-curve midpoints;
+            # production uses raw PathVerb pairs instead of this interface.
+            for index, control in enumerate(points[:-1]):
+                endpoint = points[-1]
+                if index < len(points) - 2:
+                    endpoint = tuple(
+                        (a + b) / 2 for a, b in zip(control, points[index + 1])
+                    )
+                expanded.append(("Q", (control, endpoint)))
+        else:
+            command = {
                 "moveTo": "M",
                 "lineTo": "L",
-                "qCurveTo": "Q",
                 "curveTo": "C",
                 "closePath": "Z",
-            }[kind],
+            }[kind]
+            expanded.append((command, points))
+    return [
+        (
+            command,
             tuple(int(Decimal(f"{n:.2f}") * 100) for point in points for n in point),
         )
-        for kind, points in path.segments
+        for command, points in expanded
     ]
 
 
@@ -118,6 +132,24 @@ def test_axes_reflections_and_close_reset() -> None:
     data = ET.fromstring(markup).find(f".//{SVG}path").get("d")
     assert all(command in data.lower() for command in "hvsmz")
     assert decode_path(data) == expected_commands(path)
+
+
+def test_consecutive_quadratics_expand_implied_endpoints() -> None:
+    """Skia's segment pen can combine two quadratics into three coordinate pairs."""
+    path = Path()
+    path.moveTo(1, 1)
+    path.quadTo(2, 3, 4, 4)
+    path.quadTo(6, 5, 7, 7)
+    path.close()
+    assert len(list(path.segments)[1][1]) == 3
+    markup = generate_SVG_markup([path], [[0, 0, 0]], 10, 10)
+    data = ET.fromstring(markup).find(f".//{SVG}path").get("d")
+    assert decode_path(data) == [
+        ("M", (100, 100)),
+        ("Q", (200, 300, 400, 400)),
+        ("Q", (600, 500, 700, 700)),
+        ("Z", ()),
+    ]
 
 
 def test_rounding_near_half_ties_and_negative_zero() -> None:

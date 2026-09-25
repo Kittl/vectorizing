@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 from faiss import Kmeans
 from PIL import Image
+from scipy.ndimage import distance_transform_edt
 from skimage.measure import label
 
 MIN_COMPONENT_AREA = 8
@@ -69,6 +70,17 @@ def clean_components(
     lookup[nearest[~holes]] = labels[~holes]
     cleaned = labels.copy()
     cleaned[holes] = lookup[nearest[holes]]
+    unassigned = holes & (nearest == 0)
+    if unassigned.any():
+        # OpenCV can leave zero labels beyond its distance propagation limit
+        # on very wide/tall images. Zero is not a seed: use an exact fallback
+        # only there, preserving normal chamfer assignments and tie breaking.
+        indices = distance_transform_edt(
+            holes,
+            return_distances=False,
+            return_indices=True,
+        )
+        cleaned[unassigned] = labels[tuple(indices[:, unassigned])]
     return cleaned
 
 
