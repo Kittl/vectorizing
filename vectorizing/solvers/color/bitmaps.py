@@ -3,6 +3,40 @@
 import cv2
 import numpy as np
 
+from vectorizing.solvers.color.quantize import _perimeter
+
+
+def create_background_bitmap(
+    labels: np.ndarray,
+    colors: np.ndarray,
+    has_background: bool,
+) -> np.ndarray | None:
+    """Find a frontmost opaque background and give it a bounded two-pixel rim."""
+    # The quantizer's background flag means detected transparency. Preserve that
+    # classification, including its existing handling of partial input alpha.
+    if has_background:
+        return None
+    border = _perimeter(labels)
+    background = int(border[0])
+    if not np.all(border == background):
+        return None
+    used = np.unique(labels)
+    # Intermediate backgrounds have hidden rims beneath later foreground colors;
+    # cutting those rims can break coverage. Already-first backgrounds need no fix.
+    if len(used) < 2 or background != used[-1]:
+        return None
+    if (
+        np.count_nonzero(np.all(colors[used, :3] == colors[background, :3], axis=1))
+        != 1
+    ):
+        return None
+    return cv2.dilate(
+        (labels == background).astype(np.uint8),
+        np.ones((5, 5), dtype=np.uint8),
+        borderType=cv2.BORDER_CONSTANT,
+        borderValue=0,
+    )
+
 
 def create_bitmaps(
     labels: np.ndarray,
