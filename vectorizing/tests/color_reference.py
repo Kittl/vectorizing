@@ -1,17 +1,10 @@
-"""Frozen pre-optimization algorithms used as independent regression oracles.
+"""Independent, intentionally slow oracles for optimized color operations."""
 
-Keep these intentionally slow implementations separate from production helpers:
-sharing optimized code would let a regression affect both sides of a comparison.
-Cleanup shares only the unchanged fill_holes step so tests can bypass it in both
-paths to inspect component removal before nearest-neighbor filling hides holes.
-"""
+from collections import Counter
 
 import cv2
 import numpy as np
 from PIL import Image
-from skimage.measure import label
-
-from vectorizing.solvers.color import quantize as color_quantize
 
 
 def legacy_initial_centroids(img_arr: np.ndarray, color_count: int) -> np.ndarray:
@@ -50,56 +43,36 @@ def legacy_create_bitmaps(
     return bitmaps, colors
 
 
-def legacy_enhance(
-    img_arr: np.ndarray,
+def reference_clean_components(
     labels: np.ndarray,
-    colors: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Preserve the pairwise cleanup from main at f69c69b, before PR 74."""
-    dims = img_arr.shape[:2]
-    labels = labels + 1
-    clusters = [
-        np.where(labels == idx + 1, idx + 1, 0).astype(np.uint16)
-        for idx, _ in enumerate(colors)
-    ]
-    # Preserve integer labeling, full connectivity and shifted component IDs.
-    # The optimized path must match this, not redefine the expected behavior.
-    original_connected_components_list = [label(cluster) + 1 for cluster in clusters]
-    connected_components_bincounts = [
-        np.bincount(connected_components.flatten())
-        for connected_components in original_connected_components_list
-    ]
-    connected_components_list = [
-        np.array(item, copy=True) for item in original_connected_components_list
-    ]
-    # Keep the expensive pairwise dilation scans: independence is the point.
-    for x, cluster_x in enumerate(clusters):
-        dilated_cluster_x = cv2.dilate(cluster_x, np.ones((2, 2)))
-        for y, cluster_y in enumerate(clusters):
-            if x == y:
-                continue
-            overlap = np.logical_and(dilated_cluster_x, cluster_y)
-            connected_components_list[y] = np.where(
-                overlap,
-                0,
-                connected_components_list[y],
-            )
-    for x, connected_components in enumerate(connected_components_list):
-        original_bincount = connected_components_bincounts[x]
-        count = original_bincount.shape[0]
-        new_bincount = np.bincount(connected_components.flatten(), minlength=count)
-        areas_ratio = np.divide(
-            new_bincount.astype(np.float32),
-            original_bincount.astype(np.float32),
-            out=np.ones((count,), dtype=np.float32),
-            where=original_bincount != 0,
+    background: np.ndarray | None,
+) -> np.ndarray:
+    """Find small regions one color at a time, then use labeled chamfer refill."""
+    remove = np.zeros(labels.shape, dtype=bool)
+    for color in np.unique(labels):
+        mask = labels == color
+        _, components = cv2.connectedComponents(mask.astype(np.uint8), connectivity=8)
+        sizes = np.bincount(components.ravel())
+        remove |= mask & (sizes[components] < 8)
+    if background is not None:
+        remove &= background == 0
+    else:
+        height, width = labels.shape
+        edge = {(y, x) for y in (0, height - 1) for x in range(width)}
+        edge |= {(y, x) for x in (0, width - 1) for y in range(height)}
+        counts = Counter(int(labels[y, x]) for y, x in edge if not remove[y, x])
+        if counts:
+            color = min(counts, key=lambda value: (-counts[value], value))
+            remove &= labels != color
+    result = labels.copy()
+    if remove.any() and not remove.all():
+        _, nearest = cv2.distanceTransformWithLabels(
+            remove.astype(np.uint8),
+            cv2.DIST_L2,
+            5,
+            labelType=cv2.DIST_LABEL_PIXEL,
         )
-        clusters[x] = np.where(
-            areas_ratio[original_connected_components_list[x]] <= 0.1,
-            0,
-            clusters[x],
-        )
-    labels = np.zeros(dims).astype(np.uint8)
-    for cluster in clusters:
-        labels = np.where(labels == 0, cluster, labels)
-    return color_quantize.fill_holes(labels) - 1, colors
+        # OpenCV numbers each zero pixel in scan order, starting from one.
+        survivors = labels[~remove]
+        result[remove] = survivors[nearest[remove] - 1]
+    return result

@@ -1,4 +1,4 @@
-"""Freeze externally visible SVG formatting, including whitespace and alpha."""
+"""Freeze compact SVG spelling while preserving coordinate rounding and alpha."""
 
 from collections.abc import Sequence
 
@@ -42,7 +42,7 @@ def test_color_formatting(color: Sequence[float] | np.ndarray, expected: str) ->
 
 
 def test_svg_serialization_preserves_exact_markup() -> None:
-    """Keep paint order, empty-path filtering, cubic syntax and document whitespace."""
+    """Keep paint order, empty-path filtering, viewport and fractional alpha."""
     curve = Path()
     curve.moveTo(0, 0)
     curve.lineTo(10, 0)
@@ -60,17 +60,16 @@ def test_svg_serialization_preserves_exact_markup() -> None:
     )
     assert actual == (
         '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20" '
-        'viewBox="0 0 40 20">\n'
-        '<g>\n<path d="M 0.00 0.00 L 10.00 0.00 '
-        'C10.00,1.00 9.00,2.00 0.00,0.00 Z" fill="rgb(20,30,40)" />\n'
-        '<path d="M 1.00 1.00 L 2.00 2.00 Z" fill="rgba(50,60,70,0.5)" />\n'
-        "</g>\n</svg>"
+        'viewBox="0 0 40 20"><g transform="scale(.01)">'
+        '<path d="M0 0L1000 0C1000 100 900 200 0 0z" fill="#141e28"/>'
+        '<path d="M100 100L200 200z" fill="rgba(50,60,70,0.5)"/>'
+        "</g></svg>"
     )
 
 
 def test_empty_svg_serialization() -> None:
-    """Keep the empty document's dimensions and blank group unchanged."""
+    """Keep the empty document's dimensions and omit all paint."""
     assert generate_SVG_markup([], [], 8, 9) == (
         '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="9" '
-        'viewBox="0 0 8 9">\n<g>\n\n</g>\n</svg>'
+        'viewBox="0 0 8 9"><g transform="scale(.01)"></g></svg>'
     )

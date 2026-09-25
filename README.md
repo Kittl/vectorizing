@@ -123,6 +123,25 @@ A typical response would be
 
 Or, if `raw = true` was supplied, just plain SVG markup
 
+Color processing uses a gentle 3-pixel bilateral filter and removes only connected
+components smaller than eight processed-image pixels, rather than rejecting thin
+regions based on their shape. Transparent pixels are protected; on opaque images,
+the most common surviving perimeter color is also protected to retain small
+background-colored letter counters. This can retain extra small specks of that
+color. Tracing retains small paths and uses a curve optimization tolerance of 0.5.
+The existing 1,048,576-pixel area cap, default of six
+colors and supported range of 2–64 colors are unchanged. Color paths touching the
+canvas are extended before tracing and clipped back to the image so corners remain
+covered and returned bounds do not include the padding.
+
+SVGs use compact absolute/relative commands on an integer hundredth-pixel grid,
+inside a `scale(.01)` group. This preserves the previous two-decimal coordinate
+rounding, viewport, paint order and opacity without raster images or SVG strokes.
+Binary tracing is unchanged, but both solvers use the compact serializer. Equivalent
+geometry can produce small renderer-specific antialiasing differences; exact pixel
+identity across viewers and zoom levels is not guaranteed. Potrace and pypotrace
+remain dependencies under their existing GPL licenses.
+
 Color layers have cutouts with a small overlap along shared edges to hide seams.
 The overlap is two pixels in the resized image before tracing, not screen pixels.
 Hiding a color can expose this rim; very thin features may remain covered, and
@@ -145,7 +164,9 @@ docker compose --profile testing run --build --rm test
 ```
 
 Tests are split into `test_*.py` files in `vectorizing/tests`. Compose and CI
-run them all. `color_reference.py` keeps the old code for before/after checks.
+run them all. `color_reference.py` keeps independent centroid, bitmap and area-cleanup
+oracles. The color acceptance tests also check the approved Aftermath geometry,
+Bubble Whirl's lettering counters, alpha behavior and compact SVG coordinates.
 
 When running pytest outside Compose, configure the AWS variables for an S3-compatible service first.
 

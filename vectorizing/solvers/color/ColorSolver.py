@@ -2,7 +2,7 @@
 
 import numpy as np
 import potrace
-from pathops import Path
+from pathops import Path, PathOp, op
 from PIL import Image
 
 from vectorizing.geometry.potrace import potrace_path_to_compound_path
@@ -10,6 +10,28 @@ from vectorizing.server.timer import Timer
 from vectorizing.solvers.color.bitmaps import add_bitmap_rims, create_bitmaps
 from vectorizing.solvers.color.quantize import quantize
 from vectorizing.util.limit_size import limit_size
+
+
+def trace_bitmap(bitmap: np.ndarray) -> Path:
+    """Trace detail without speck removal, extending then clipping canvas edges."""
+    height, width = bitmap.shape
+    # Potrace rounds exposed mask corners. Extending edge labels moves that
+    # rounding outside the viewport instead of leaving transparent canvas corners.
+    padded = np.pad(bitmap.astype(np.uint8), 2, mode="edge")
+    traced = potrace.Bitmap(padded).trace(turdsize=0, opttolerance=0.5, alphamax=1)
+    path = potrace_path_to_compound_path(traced).transform(1, 0, 0, 1, -2, -2)
+    left, top, right, bottom = path.bounds
+    if left < 0 or top < 0 or right > width or bottom > height:
+        # Keep returned geometry/bounds inside the image, not just the SVG's
+        # viewport. This also makes layer exports safe without the original clip.
+        canvas = Path()
+        canvas.moveTo(0, 0)
+        canvas.lineTo(width, 0)
+        canvas.lineTo(width, height)
+        canvas.lineTo(0, height)
+        canvas.close()
+        path = op(path, canvas, PathOp.INTERSECTION)
+    return path
 
 
 class ColorSolver:
@@ -40,12 +62,8 @@ class ColorSolver:
         self.timer.end_timer()
 
         self.timer.start_timer("Bitmap Tracing")
-        traced_bitmaps = [potrace.Bitmap(bitmap).trace() for bitmap in bitmaps]
+        compound_paths = [trace_bitmap(bitmap) for bitmap in bitmaps]
         self.timer.end_timer()
-
-        compound_paths = [
-            potrace_path_to_compound_path(traced) for traced in traced_bitmaps
-        ]
 
         return [compound_paths, colors, self.img.size[0], self.img.size[1]]
 
