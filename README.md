@@ -151,6 +151,20 @@ The overlap is two pixels in the resized image before tracing, not screen pixels
 Hiding a color can expose this rim; very thin features may remain covered, and
 zooming in makes the rim larger. No SVG strokes are added.
 
+Background deletion has a conservative exception: if the existing quantizer treats
+an image as opaque, its entire processed perimeter has one uniquely identifiable
+palette color, and that color is the last/frontmost used layer, the solver trims
+its hidden foreground overlaps and paints a bounded background first. This keeps
+background deletion from fattening the artwork while retaining smooth tracing.
+The background still has only a two-pixel rim, not a full-canvas underpainting.
+Already-first backgrounds, intermediate background layers, ambiguous borders and
+outputs with detected transparency stay unchanged. This uses the existing alpha
+classification, not a new requirement that every input alpha value be 255.
+If an isolation subtraction or its new background clip fails, the complete original
+layer set is retained with a warning. Other foreground-color deletions can still
+expose their existing overlaps. Paint order and some edge pixels change for
+qualifying images; target-editor import/edit/export should be checked before release.
+
 ## Testing
 
 Tests work on rasterized versions of vectorized markup. i.e

@@ -9,7 +9,11 @@ from PIL import Image
 
 from vectorizing.geometry.potrace import potrace_path_to_compound_path
 from vectorizing.server.timer import Timer
-from vectorizing.solvers.color.bitmaps import add_bitmap_rims, create_bitmaps
+from vectorizing.solvers.color.bitmaps import (
+    add_bitmap_rims,
+    create_background_bitmap,
+    create_bitmaps,
+)
 from vectorizing.solvers.color.quantize import quantize
 from vectorizing.util.limit_size import limit_size
 
@@ -20,8 +24,8 @@ def _trace_mask(bitmap: np.ndarray) -> Path:
     return potrace_path_to_compound_path(traced)
 
 
-def trace_bitmap(bitmap: np.ndarray) -> Path:
-    """Trace detail without speck removal, extending then clipping canvas edges."""
+def trace_bitmap(bitmap: np.ndarray, *, recover_clip: bool = True) -> Path:
+    """Trace bounded detail, optionally leaving clip recovery to the caller."""
     height, width = bitmap.shape
     # Potrace rounds exposed mask corners. Extending edge labels moves that
     # rounding outside the viewport instead of leaving transparent canvas corners.
@@ -41,6 +45,8 @@ def trace_bitmap(bitmap: np.ndarray) -> Path:
         try:
             path = op(path, canvas, PathOp.INTERSECTION)
         except PathOpsError:
+            if not recover_clip:
+                raise
             # Recovery keeps smooth, bounded vectors and does not repeat the
             # failing boolean operation. Unpadded tracing can round canvas
             # corners inward; only this exceptional layer loses edge coverage.
@@ -84,12 +90,30 @@ class ColorSolver:
         self.timer.end_timer()
 
         self.timer.start_timer("Bitmap Creation")
+        background_bitmap = create_background_bitmap(labels, colors, has_background)
         bitmaps, colors = create_bitmaps(labels, colors, has_background)
         add_bitmap_rims(bitmaps)
         self.timer.end_timer()
 
         self.timer.start_timer("Bitmap Tracing")
         compound_paths = [trace_bitmap(bitmap) for bitmap in bitmaps]
+        if background_bitmap is not None:
+            try:
+                background = trace_bitmap(background_bitmap, recover_clip=False)
+                foreground = [
+                    op(path, compound_paths[-1], PathOp.DIFFERENCE)
+                    for path in compound_paths[:-1]
+                ]
+            except PathOpsError:
+                # Keep the complete original output if any isolation step fails;
+                # never publish only the foreground colors processed so far.
+                logging.getLogger(__name__).warning(
+                    "Background isolation failed; retaining original layers",
+                    exc_info=True,
+                )
+            else:
+                compound_paths = [background, *foreground]
+                colors = [colors[-1], *colors[:-1]]
         self.timer.end_timer()
 
         return [compound_paths, colors, self.img.size[0], self.img.size[1]]
