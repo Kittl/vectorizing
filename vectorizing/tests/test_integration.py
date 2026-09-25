@@ -107,19 +107,24 @@ def test_color_solver_preserves_empty_transparent_image() -> None:
     assert rendered.getchannel("A").getextrema() == (0, 0)
 
 
-def test_uploads_markup_to_s3(client: FlaskClient) -> None:
+@pytest.mark.parametrize("solver", [0, 1])
+def test_uploads_markup_to_s3(client: FlaskClient, solver: int) -> None:
     """Store the generated SVG with its media type and return the object's key."""
     response = client.post(
         "/",
         json={
             "url": get_image_url("black_rectangle.png"),
-            "solver": 0,
+            "solver": solver,
             "raw": False,
         },
     )
 
     assert response.status_code == 200
     payload = response.get_json()
+    info = payload["info"]
+    bounds = info["bounds"]
+    assert 0 <= bounds["left"] <= bounds["right"] <= info["image_width"]
+    assert 0 <= bounds["top"] <= bounds["bottom"] <= info["image_height"]
     test_bucket = os.environ["S3_TEST_BUCKET"]
     s3 = get_s3_client()
     try:

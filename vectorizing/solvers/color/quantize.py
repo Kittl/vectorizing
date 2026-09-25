@@ -1,92 +1,91 @@
-"""Quantize RGB colors while keeping transparent background pixels separate."""
+"""Quantize colors without discarding connected thin features or alpha holes."""
 
 import cv2
 import numpy as np
-import scipy.ndimage as ndi
 from faiss import Kmeans
 from PIL import Image
+from scipy.ndimage import distance_transform_edt
 from skimage.measure import label
 
-BILATERAL_FILTER_DIAMETER = 7
-BILATERAL_FILTER_SIGMA = 50
+MIN_COMPONENT_AREA = 8
 
 
-def bilateral_filter(
-    img_arr: np.ndarray,
-    d: int = BILATERAL_FILTER_DIAMETER,
-    s: float = BILATERAL_FILTER_SIGMA,
-) -> np.ndarray:
-    """Smooth clip-art colors while preserving edges; photos may lose detail."""
-    return cv2.bilateralFilter(img_arr, d, s, s)
+def bilateral_filter(img_arr: np.ndarray) -> np.ndarray:
+    """Gently smooth local color noise without the broad blur of a large kernel."""
+    return cv2.bilateralFilter(img_arr, 3, 12, 1)
 
 
-def fill_holes(matrix: np.ndarray) -> np.ndarray:
-    """Replace zero cells with their nearest nonzero value via a distance transform."""
-    closest = ndi.distance_transform_edt(
-        np.logical_not(matrix),
-        return_distances=False,
-        return_indices=True,
-    )
-    matrix = np.where(matrix != 0, matrix, matrix[closest[0], closest[1]])
-    return matrix
+def _perimeter(array: np.ndarray) -> np.ndarray:
+    """Read each boundary pixel once, including single-row or single-column images."""
+    if min(array.shape) == 1:
+        return array.ravel()
+    return np.concatenate([array[0], array[-1], array[1:-1, 0], array[1:-1, -1]])
 
 
-def enhance(
-    img_arr: np.ndarray,
+def clean_components(
     labels: np.ndarray,
-    colors: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Remove boundary-dominated components with O(K*N) work and O(N) image storage."""
-    # Reserve zero for holes, preserving the existing input-dtype shift behavior.
-    labels = labels + 1
-    valid = (labels > 0) & (labels <= len(colors))
+    background: np.ndarray | None,
+) -> np.ndarray:
+    """Refill tiny components, protecting transparency and background-color counters.
 
-    # OpenCV's 2x2 dilation (default anchor/border) reaches a pixel from above,
-    # left, and upper-left. Mark overlap from any OTHER palette color once,
-    # without treating missing/out-of-palette neighbors as a dilated cluster.
-    boundary = np.zeros(labels.shape, dtype=bool)
-    boundary[1:, :] |= valid[:-1, :] & (labels[1:, :] != labels[:-1, :])
-    boundary[:, 1:] |= valid[:, :-1] & (labels[:, 1:] != labels[:, :-1])
-    boundary[1:, 1:] |= valid[:-1, :-1] & (labels[1:, 1:] != labels[:-1, :-1])
+    Area, not the proportion of interior pixels, determines removal, retaining
+    thin components above the cutoff. Connectivity includes diagonal contacts.
+    The labeled chamfer transform assigns removed pixels to surviving neighbors;
+    when nothing survives, retain the input instead of inventing a replacement.
+    For opaque images, protect the most common surviving perimeter color so small
+    enclosed letter counters are not filled. Ties use the lowest palette index.
 
-    # The boundary is fixed; reuse its complement for every color's area count.
-    interior = ~boundary
-    del boundary, valid
-    cleaned = np.zeros(img_arr.shape[:2], dtype=np.uint16 if len(colors) else np.uint8)
-    # One scan finds every color's box, including all disconnected components.
-    # max_label excludes invalid labels; zero would instead infer the maximum.
-    regions = ndi.find_objects(labels, max_label=len(colors)) if len(colors) else []
-    for index, region in enumerate(regions):
-        if region is None:
-            continue
-        cluster = labels[region] == index + 1
-        # Keep full (8-neighbor) connectivity, including diagonal contacts.
-        components = label(cluster, connectivity=2)
-        original_counts = np.bincount(components.ravel())
-        interior_counts = np.bincount(
-            # Slice the global mask: other colors outside the box still influence it.
-            components[interior[region]],
-            minlength=len(original_counts),
+    Parameters
+    ----------
+    labels : numpy.ndarray
+        Two-dimensional palette indices, including zero for any background.
+    background : numpy.ndarray or None
+        Nonzero at protected transparent pixels, if present.
+
+    Returns
+    -------
+    numpy.ndarray
+        Cleaned labels with the input dtype; the input is never mutated.
+    """
+    components = label(labels.astype(np.uint16) + 1, background=0, connectivity=2)
+    counts = np.bincount(components.ravel())
+    holes = counts[components] < MIN_COMPONENT_AREA
+    if background is not None:
+        holes &= background == 0
+    elif holes.any() and not holes.all():
+        perimeter = _perimeter(labels)[~_perimeter(holes)]
+        if perimeter.size:
+            background_color = np.bincount(perimeter).argmax()
+            holes &= labels != background_color
+    if not holes.any() or holes.all():
+        return labels
+
+    _, nearest = cv2.distanceTransformWithLabels(
+        holes.astype(np.uint8),
+        cv2.DIST_L2,
+        5,
+        labelType=cv2.DIST_LABEL_PIXEL,
+    )
+    lookup = np.zeros(int(nearest.max()) + 1, dtype=labels.dtype)
+    lookup[nearest[~holes]] = labels[~holes]
+    cleaned = labels.copy()
+    cleaned[holes] = lookup[nearest[holes]]
+    unassigned = holes & (nearest == 0)
+    if unassigned.any():
+        # OpenCV can leave zero labels beyond its distance propagation limit
+        # on very wide/tall images. Zero is not a seed: use an exact fallback
+        # only there, preserving normal chamfer assignments and tie breaking.
+        indices = distance_transform_edt(
+            holes,
+            return_distances=False,
+            return_indices=True,
         )
-        areas_ratio = np.divide(
-            interior_counts.astype(np.float32),
-            original_counts.astype(np.float32),
-            out=np.ones(len(original_counts), dtype=np.float32),
-            where=original_counts != 0,
-        )
-        # Retain whole components, using the same float32, inclusive <=0.1 cutoff.
-        cleaned[region][cluster & (areas_ratio[components] > 0.1)] = index + 1
-        # Release this map before allocating the next color's component map.
-        del components
-
-    return fill_holes(cleaned) - 1, colors
+        cleaned[unassigned] = labels[tuple(indices[:, unassigned])]
+    return cleaned
 
 
-# Try to get the cluster of pixels that represent a transparent background
-# If there is no transparent background, return None
-# This is needed because RGBA quantization is very volatile, and sometimes
-# opaque colors get assigned to the same clusters as highly transparent ones.
-# So we focus on the solid image + transparent background case for now.
+# Keep transparent pixels separate from RGB clustering: otherwise opaque and
+# transparent pixels with similar RGB values can be assigned to the same color.
 def get_background_cluster(img_arr: np.ndarray, t: float = 0.5) -> np.ndarray | None:
     """Return an alpha mask if any raw alpha is below t, otherwise return None."""
     r, g, b, a = cv2.split(img_arr)
@@ -99,8 +98,6 @@ def get_background_cluster(img_arr: np.ndarray, t: float = 0.5) -> np.ndarray | 
     return None
 
 
-# Write the background cluster on top of a matrix of clusters (labels)
-# The background cluster has priority
 def write_background_cluster(labels: np.ndarray, bg_cluster: np.ndarray) -> np.ndarray:
     """Shift labels by one, reserving zero for the overriding background mask."""
     labels = labels + 1
@@ -111,13 +108,9 @@ def write_background_cluster(labels: np.ndarray, bg_cluster: np.ndarray) -> np.n
 def get_initial_centroids(img_arr: np.ndarray, color_count: int) -> np.ndarray:
     """Return sorted unique used RGB palette colors for K-means initialization."""
     img = Image.fromarray(img_arr)
-
     img = img.quantize(color_count, method=Image.Quantize.FASTOCTREE)
-
-    # Ignore unused entries: palette padding must not add extra K-means clusters.
-    # Keep np.unique's RGB order and deduplication, but sort only the used palette
-    # rather than every pixel. Centroid order affects K-means results.
-    # quantize() returns mode P: at most 256 entries, within getcolors()'s cap.
+    # Palette padding must not introduce additional clusters. RGB order affects
+    # initialization, so sort the used entries rather than the entire pixel grid.
     used_indices = [index for _, index in img.getcolors()]
     palette = np.asarray(img.getpalette("RGB"), dtype=np.uint8).reshape(-1, 3)
     return np.unique(palette[used_indices], axis=0)
@@ -141,28 +134,25 @@ def quantize(
     img_arr: np.ndarray,
     color_count: int,
 ) -> tuple[np.ndarray, np.ndarray, bool]:
-    """Return cleaned labels, palette colors and whether a background was isolated."""
-    channel_count = img_arr.shape[-1]
+    """Return area-cleaned labels, an RGB-ordered palette and background status."""
+    background = get_background_cluster(img_arr) if img_arr.shape[-1] == 4 else None
+    rgb = bilateral_filter(img_arr[:, :, :3].copy())
+    labels, colors = kmeans(rgb, get_initial_centroids(rgb, color_count))
+    labels = labels.reshape(rgb.shape[:2])
 
-    background_cluster = None
-    if channel_count == 4:
-        background_cluster = get_background_cluster(img_arr)
-        img = Image.fromarray(img_arr)
-        img = img.convert("RGB")
-        img_arr = np.asarray(img)
-
-    img_arr = bilateral_filter(img_arr)
-
-    labels, colors = kmeans(img_arr, get_initial_centroids(img_arr, color_count))
-
-    labels = np.reshape(labels, img_arr.shape[:-1])
-
-    has_background = background_cluster is not None
-    if has_background:
-        labels = write_background_cluster(labels, background_cluster)
-        colors = [[0, 0, 0, 0]] + [[r, g, b, 1] for r, g, b in colors]
-        colors = np.array(colors)
-
-    colors = colors.astype(np.uint8)
-    labels, colors = enhance(img_arr, labels, colors)
-    return labels, colors, has_background
+    # Paint order determines which neighboring colors may receive a bounded rim.
+    order = np.lexsort(colors.T[::-1])
+    labels = np.argsort(order)[labels].astype(np.uint16)
+    colors = colors[order]
+    if background is not None:
+        labels = write_background_cluster(labels, background)
+        colors = np.vstack(
+            [
+                np.zeros((1, 4), dtype=np.uint8),
+                np.column_stack([colors, np.ones(len(colors), dtype=np.uint8)]),
+            ],
+        )
+    labels = clean_components(labels, background)
+    if background is not None:
+        labels = np.where(background > 0, 0, labels)
+    return labels, colors, background is not None

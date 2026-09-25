@@ -1,8 +1,4 @@
-"""Full solver regressions comparing exact SVG bytes, colors and geometry.
-
-Replace one optimization at a time with its frozen reference while retaining the
-others. This catches interactions that isolated mask/centroid/cleanup tests miss.
-"""
+"""Compare optimized P3 operations with independent references end to end."""
 
 from pathlib import Path
 from unittest.mock import Mock
@@ -17,8 +13,8 @@ from vectorizing.solvers.color.ColorSolver import ColorSolver
 from vectorizing.svg.markup import generate_SVG_markup
 from vectorizing.tests.color_reference import (
     legacy_create_bitmaps,
-    legacy_enhance,
     legacy_initial_centroids,
+    reference_clean_components,
 )
 
 
@@ -42,7 +38,7 @@ def test_color_optimizations_preserve_vectorization(
     optimization: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Compare final SVG, colors, dimensions and bounds against the old algorithm."""
+    """Compare SVG, colors, dimensions and bounds with independent operation oracles."""
     with Image.open(Path(__file__).parent / "images" / image_name) as image:
         actual = ColorSolver(image, color_count, Timer()).solve()
         target, legacy = {
@@ -55,8 +51,8 @@ def test_color_optimizations_preserve_vectorization(
                 legacy_create_bitmaps,
             ),
             "cleanup": (
-                "vectorizing.solvers.color.quantize.enhance",
-                legacy_enhance,
+                "vectorizing.solvers.color.quantize.clean_components",
+                reference_clean_components,
             ),
         }[optimization]
         # Patch each lookup site and verify the legacy implementation was used.
