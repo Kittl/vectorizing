@@ -34,7 +34,8 @@ def transparent_artwork() -> Image.Image:
 def test_default_quantization_matches_original_rgba_output() -> None:
     """Pin the original palette, transparent cluster, label dtype and mask bytes."""
     labels, colors, has_background = legacy.quantize(
-        np.asarray(transparent_artwork()), 4
+        np.asarray(transparent_artwork()),
+        4,
     )
     assert has_background
     assert labels.dtype == np.uint16
@@ -58,7 +59,8 @@ def test_original_rgb_component_cleanup_matches_reference() -> None:
     path = Path(__file__).parent / "images" / "shapes_2.png"
     with Image.open(path) as image:
         labels, colors, has_background = legacy.quantize(
-            np.asarray(limit_size(image.convert("RGB"))).astype(np.uint8), 7
+            np.asarray(limit_size(image.convert("RGB"))).astype(np.uint8),
+            7,
         )
     assert not has_background
     assert hashlib.sha256(labels.tobytes()).hexdigest() == (
@@ -102,7 +104,8 @@ def test_original_cleanup_matches_pairwise_reference(
     monkeypatch.setattr(legacy, "kmeans", lambda *_: (assigned.reshape(-1, 1), colors))
     actual, palette, has_background = legacy.quantize(image, count)
     np.testing.assert_array_equal(
-        actual, original_area_cleanup(original_labels, count + int(transparent))
+        actual,
+        original_area_cleanup(original_labels, count + int(transparent)),
     )
     assert actual.dtype == np.uint16
     assert has_background is transparent
@@ -136,10 +139,13 @@ def test_original_opaque_svg_matches_reference(
     with Image.open(path) as source:
         image = convert_RGB_A(source).copy()
     monkeypatch.setattr(
-        vectorizing, "try_read_image_from_url", Mock(return_value=image)
+        vectorizing,
+        "try_read_image_from_url",
+        Mock(return_value=image),
     )
     response = client.post(
-        "/", json={"url": "image", "solver": 1, "color_count": 5, "raw": True}
+        "/",
+        json={"url": "image", "solver": 1, "color_count": 5, "raw": True},
     )
     assert response.status_code == 200
     assert hashlib.sha256(response.data).hexdigest() == (
@@ -154,7 +160,9 @@ def test_original_profile_is_http_default_and_experimental_is_independent(
     """Pin original raw SVG bytes while keeping the newer pipeline selectable."""
     image = transparent_artwork()
     monkeypatch.setattr(
-        vectorizing, "try_read_image_from_url", Mock(return_value=image)
+        vectorizing,
+        "try_read_image_from_url",
+        Mock(return_value=image),
     )
     base = {"url": "image", "solver": 1, "color_count": 4, "raw": True}
     default = client.post("/", json=base)
@@ -168,6 +176,6 @@ def test_original_profile_is_http_default_and_experimental_is_independent(
     )
     assert experimental.data != default.data
     assert experimental.data.decode() == generate_SVG_markup(
-        *ColorSolver(image, 4, Timer(), "experimental").solve()
+        *ColorSolver(image, 4, Timer(), "experimental").solve(),
     )
     assert client.post("/", json=base).data == default.data
