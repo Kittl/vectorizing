@@ -20,7 +20,12 @@ def peak_rss_mib() -> float:
     return value / (1024 * 1024 if sys.platform == "darwin" else 1024)
 
 
-def sample(name: str, source_root: Path, warmups: int) -> dict[str, object]:
+def sample(
+    name: str,
+    source_root: Path,
+    warmups: int,
+    configuration: str | None = None,
+) -> dict[str, object]:
     """Warm one case, time one run and verify stable output in this fresh process."""
     from scripts._vectorization import (
         environment,
@@ -29,7 +34,7 @@ def sample(name: str, source_root: Path, warmups: int) -> dict[str, object]:
         source_hash,
     )
 
-    run = prepare_case(name, source_root)
+    run = prepare_case(name, source_root, configuration)
     revision = source_hash(source_root)
     expected = None
     consistent = True
@@ -53,7 +58,12 @@ def sample(name: str, source_root: Path, warmups: int) -> dict[str, object]:
     }
 
 
-def run_sample(name: str, source_root: Path, warmups: int) -> dict[str, object]:
+def run_sample(
+    name: str,
+    source_root: Path,
+    warmups: int,
+    configuration: str | None = None,
+) -> dict[str, object]:
     """Run this script in a new interpreter, propagating worker failures."""
     command = [
         sys.executable,
@@ -66,6 +76,8 @@ def run_sample(name: str, source_root: Path, warmups: int) -> dict[str, object]:
         "--warmups",
         str(warmups),
     ]
+    if configuration is not None:
+        command.extend(["--configuration", configuration])
     # The executable and script are fixed; arguments are passed without a shell.
     result = subprocess.run(command, capture_output=True, text=True)  # noqa: S603
     if result.returncode:
@@ -80,6 +92,7 @@ def benchmark(
     roots: dict[str, Path],
     repeats: int,
     warmups: int,
+    configurations: dict[str, str | None] | None = None,
 ) -> tuple[dict[str, object], bool]:
     """Alternate variants, retaining raw samples and exact-output equality checks."""
     cases = {}
@@ -89,7 +102,14 @@ def benchmark(
         for iteration in range(repeats):
             order = list(roots) if iteration % 2 == 0 else list(reversed(roots))
             for variant in order:
-                samples[variant].append(run_sample(name, roots[variant], warmups))
+                samples[variant].append(
+                    run_sample(
+                        name,
+                        roots[variant],
+                        warmups,
+                        (configurations or {}).get(variant),
+                    ),
+                )
         reference = next(iter(samples.values()))[0]["output"]
         equal = all(
             row["consistent"] and row["output"] == reference
@@ -157,6 +177,14 @@ def main(argv: list[str] | None = None) -> int:
         choices=CASES,
         help="Repeat to select cases; default: all",
     )
+    parser.add_argument(
+        "--configuration",
+        help="Candidate color profile; omitted uses its default",
+    )
+    parser.add_argument(
+        "--baseline-configuration",
+        help="Baseline color profile; omitted uses its checkout's default",
+    )
     parser.add_argument("--repeats", type=positive, default=3)
     parser.add_argument(
         "--warmups",
@@ -177,22 +205,40 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("A worker measures exactly one case")
             print(
                 json.dumps(
-                    sample(names[0], args.source_root, args.warmups),
+                    sample(
+                        names[0],
+                        args.source_root,
+                        args.warmups,
+                        args.configuration,
+                    ),
                     allow_nan=False,
                 ),
             )
             return 0
         if args.output is None:
             raise ValueError("--output is required")
+        if args.baseline_configuration is not None and args.baseline_root is None:
+            raise ValueError("--baseline-configuration requires --baseline-root")
         if args.output.exists():
             raise ValueError(f"Refusing to overwrite: {args.output}")
         roots = {"baseline": args.baseline_root.resolve()} if args.baseline_root else {}
         roots["candidate"] = args.source_root.resolve()
-        cases, equal = benchmark(names, roots, args.repeats, args.warmups)
+        configurations = {
+            "baseline": args.baseline_configuration,
+            "candidate": args.configuration,
+        }
+        cases, equal = benchmark(
+            names,
+            roots,
+            args.repeats,
+            args.warmups,
+            configurations,
+        )
         report = {
             "schema_version": 1,
             "label": args.label,
             "source_roots": {name: str(path) for name, path in roots.items()},
+            "configurations": {name: configurations[name] for name in roots},
             "repeats": args.repeats,
             "warmups_per_process": args.warmups,
             "timing_scope": "solver, SVG serialization, colors, dimensions and bounds",

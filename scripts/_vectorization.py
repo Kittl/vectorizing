@@ -82,6 +82,7 @@ def environment() -> dict[str, object]:
 def prepare_case(
     name: str,
     source_root: Path,
+    configuration: str | None = None,
 ) -> Callable[[], tuple[str, dict[str, object]]]:
     """Load a fixture once and return a fresh solver/SVG/bounds run for its checkout."""
     source_root = source_root.resolve()
@@ -100,7 +101,7 @@ def prepare_case(
     from vectorizing.server.timer import Timer
     from vectorizing.solvers.binary.BinarySolver import BinarySolver
     from vectorizing.solvers.color.ColorSolver import ColorSolver
-    from vectorizing.svg.markup import generate_SVG_markup
+    from vectorizing.svg import markup
     from vectorizing.util.read import convert_RGB_A
 
     if Path(vectorizing.__file__).resolve().parent != source_root / "vectorizing":
@@ -108,6 +109,18 @@ def prepare_case(
             "A different checkout is already imported; use a fresh process",
         )
     filename, solver, count = CASES[name]
+    solver_module = sys.modules[ColorSolver.__module__]
+    profiles = getattr(solver_module, "CONFIGURATIONS", {})
+    selected = (
+        configuration
+        if configuration is not None
+        else getattr(solver_module, "DEFAULT_CONFIGURATION", None)
+    )
+    if configuration is not None and selected not in profiles:
+        raise ValueError(
+            f"Configuration {configuration!r} is not supported by {source_root}",
+        )
+    color_args = (configuration,) if configuration is not None else ()
     path = source_root / "vectorizing" / "tests" / "images" / filename
     with Image.open(path) as source:
         image = convert_RGB_A(source).copy()
@@ -122,7 +135,7 @@ def prepare_case(
         result = (
             BinarySolver(image).solve()
             if solver == "binary"
-            else ColorSolver(image, count, Timer()).solve()
+            else ColorSolver(image, count, Timer(), *color_args).solve()
         )
         paths, colors, width, height = result
         bounds = compound_paths_bounds(paths)
@@ -132,7 +145,14 @@ def prepare_case(
             for key, value in bounds.items()
         }
         palette = np.asarray(colors)
-        return generate_SVG_markup(*result), {
+        serialize = (
+            markup.generate_original_SVG_markup
+            if solver == "color"
+            and selected in profiles
+            and profiles[selected].original_svg_serialization
+            else markup.generate_SVG_markup
+        )
+        return serialize(*result), {
             "input": source_info,
             "colors": palette.tolist(),
             "colors_dtype": str(palette.dtype),

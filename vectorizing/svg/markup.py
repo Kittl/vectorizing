@@ -112,6 +112,43 @@ def _path_data(path: Path, width: int, height: int) -> str:
     return "".join(pieces)
 
 
+def generate_original_SVG_markup(
+    compound_paths: Iterable[Path],
+    colors: Iterable[Sequence[float] | np.ndarray],
+    width: int,
+    height: int,
+) -> str:
+    """Serialize with the original absolute commands and two-decimal coordinates."""
+    paths_markup = []
+    for compound_path, color in zip(compound_paths, colors):
+        segments = list(compound_path.segments)
+        if not segments:
+            continue
+        data = ""
+        for command, points in segments:
+            if command == "moveTo":
+                data += f"M {truncate(points[0][0])} {truncate(points[0][1])} "
+            if command == "lineTo":
+                data += f"L {truncate(points[0][0])} {truncate(points[0][1])} "
+            if command == "curveTo":
+                data += (
+                    "C" + f"{truncate(points[0][0])},{truncate(points[0][1])} "
+                    f"{truncate(points[1][0])},{truncate(points[1][1])} "
+                    f"{truncate(points[2][0])},{truncate(points[2][1])} "
+                )
+            if command == "closePath":
+                data += "Z"
+        paths_markup.append(
+            f'<path d="{data}" fill="{to_SVG_color_string(color)}" />',
+        )
+    markup = "\n".join(paths_markup)
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}">\n'
+        f"<g>\n{markup}\n</g>\n</svg>"
+    )
+
+
 def generate_SVG_markup(
     compound_paths: Iterable[Path],
     colors: Iterable[Sequence[float] | np.ndarray],

@@ -40,7 +40,12 @@ def test_aftermath_matches_approved_p3_geometry(
         capture_rims,
     )
     with Image.open(IMAGES / "aftermath.png") as image:
-        paths, colors, width, height = ColorSolver(image, 8, Timer()).solve()
+        paths, colors, width, height = ColorSolver(
+            image,
+            8,
+            Timer(),
+            "experimental",
+        ).solve()
     # Ordered masks are identical across ARM64 and x86_64. Native Potrace makes
     # different curve-optimization decisions on those identical inputs. Both
     # geometry captures were checked for coverage and composited render error;
@@ -79,7 +84,7 @@ def test_aftermath_matches_approved_p3_geometry(
 def bubbles_pixels() -> np.ndarray:
     """Render the real 16-color artwork at its original dimensions."""
     with Image.open(IMAGES / "bubbles.png") as image:
-        result = ColorSolver(image, 16, Timer()).solve()
+        result = ColorSolver(image, 16, Timer(), "experimental").solve()
         png = svg2png(
             bytestring=generate_SVG_markup(*result),
             output_width=image.width,
@@ -178,7 +183,15 @@ def test_clip_failure_retraces_bounded_vectors(
     monkeypatch.setattr("vectorizing.solvers.color.ColorSolver.op", clip)
     upload = Mock(return_value="fallback-svg")
     monkeypatch.setattr("vectorizing.upload_markup", upload)
-    response = client.post("/", json={"url": "unused", "solver": 1, "raw": raw})
+    response = client.post(
+        "/",
+        json={
+            "url": "unused",
+            "solver": 1,
+            "configuration": "experimental",
+            "raw": raw,
+        },
+    )
     assert response.status_code == 200
     clip.assert_called_once()
     assert "retracing without padding" in caplog.text
@@ -218,7 +231,7 @@ def test_clip_recovery_constrains_curve_overshoot(
 def test_clipped_logo_preserves_opaque_canvas() -> None:
     """Keep coverage on a real clipped logo, including the canvas boundary."""
     with Image.open(IMAGES / "geo_logo.png") as image:
-        result = ColorSolver(image, 8, Timer()).solve()
+        result = ColorSolver(image, 8, Timer(), "experimental").solve()
     markup = generate_SVG_markup(*result)
     png = svg2png(bytestring=markup)
     pixels = np.asarray(Image.open(BytesIO(png)).convert("RGBA"))
@@ -232,7 +245,7 @@ def test_clipped_consecutive_quadratics_keep_opaque_coverage() -> None:
     mask = rng.random((height, width)) < rng.uniform(0.03, 0.98)
     pixels = np.full((height, width, 3), 255, dtype=np.uint8)
     pixels[mask] = [255, 0, 0]
-    result = ColorSolver(Image.fromarray(pixels), 2, Timer()).solve()
+    result = ColorSolver(Image.fromarray(pixels), 2, Timer(), "experimental").solve()
     rendered = np.asarray(
         Image.open(
             BytesIO(svg2png(bytestring=generate_SVG_markup(*result))),
@@ -248,5 +261,5 @@ def test_fully_transparent_image_has_no_foreground() -> None:
     assert background
     np.testing.assert_array_equal(labels, 0)
     assert palette.dtype == np.uint8
-    result = ColorSolver(Image.fromarray(pixels), 16, Timer()).solve()
+    result = ColorSolver(Image.fromarray(pixels), 16, Timer(), "experimental").solve()
     assert result[0] == []

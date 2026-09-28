@@ -27,6 +27,7 @@ def trace_layers(
         Image.fromarray(palette[labels]),
         3,
         Timer(),
+        "experimental",
     ).solve()
     quantize.assert_called_once()
     return paths, retained

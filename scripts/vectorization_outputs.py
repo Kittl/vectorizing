@@ -12,6 +12,7 @@ def capture(
     names: list[str],
     source_root: Path,
     label: str | None,
+    configuration: str | None = None,
 ) -> None:
     """Write a complete manifest last, refusing to replace existing artifacts."""
     from cairosvg import svg2png
@@ -28,7 +29,7 @@ def capture(
     output.mkdir(parents=True, exist_ok=True)
     cases = {}
     for name in names:
-        svg, details = prepare_case(name, source_root)()
+        svg, details = prepare_case(name, source_root, configuration)()
         svg_bytes = svg.encode("utf-8")
         for extension, data in {
             "svg": svg_bytes,
@@ -46,6 +47,7 @@ def capture(
     report = {
         "schema_version": 1,
         "label": label,
+        "configuration": configuration,
         "source_root": str(source_root.resolve()),
         "source_sha256": source_hash(source_root),
         "environment": environment(),
@@ -155,6 +157,10 @@ def main(argv: list[str] | None = None) -> int:
         "--label",
         help="Optional revision or description for the manifest",
     )
+    save.add_argument(
+        "--configuration",
+        help="Color profile in the source checkout; omitted uses its default",
+    )
     diff = commands.add_parser(
         "compare",
         help="Compare complete captures; exit 1 on changes",
@@ -170,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
             list(dict.fromkeys(args.case or CASES)),
             args.source_root,
             args.label,
+            args.configuration,
         )
         return 0
     except (OSError, ValueError, ImportError) as error:

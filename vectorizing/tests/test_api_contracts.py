@@ -19,6 +19,10 @@ import vectorizing
         {"url": "image", "solver": "1"},
         {"url": "image", "crop_box": [0, 0, 3]},
         {"url": "image", "crop_box": [0, 0, 3.5, 4]},
+        {"url": "image", "configuration": "unknown"},
+        {"url": "image", "configuration": "legacy"},
+        {"url": "image", "configuration": None},
+        {"url": "image", "configuration": []},
     ],
 )
 def test_invalid_arguments_return_the_same_error(
@@ -36,6 +40,7 @@ def test_invalid_arguments_return_the_same_error(
     "payload",
     [
         {"url": "image"},
+        {"url": "image", "configuration": "experimental"},
         {"url": None},
         {"url": "image", "solver": True},
         {"url": "image", "crop_box": []},
@@ -54,6 +59,7 @@ def test_argument_validation_preserves_accepted_values(
         "crop_box": payload.get("crop_box"),
         "raw": None,
         "color_count": None,
+        "configuration": payload.get("configuration", "current"),
     }
 
 
@@ -89,10 +95,37 @@ def test_raw_requests_crop_before_vectorizing_and_do_not_upload(
     assert b'width="8" height="8"' in response.data
     chosen, unused = (binary, color) if solver == 0 else (color, binary)
     chosen.assert_called_once()
+    if solver == 1:
+        assert chosen.call_args.args[3] == "current"
     assert chosen.call_args.args[0].size == (4, 4)
     unused.assert_not_called()
     load.assert_called_once_with("image")
     upload.assert_not_called()
+
+
+def test_color_configuration_can_be_forced(
+    client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pass a named request configuration through to color processing."""
+    monkeypatch.setattr(
+        vectorizing,
+        "try_read_image_from_url",
+        Mock(return_value=Image.new("RGB", (8, 8))),
+    )
+    color = Mock(return_value=([], [], 8, 8))
+    monkeypatch.setattr(vectorizing, "process_color", color)
+    response = client.post(
+        "/",
+        json={
+            "url": "image",
+            "solver": 1,
+            "configuration": "experimental",
+            "raw": True,
+        },
+    )
+    assert response.status_code == 200
+    assert color.call_args.args[3] == "experimental"
 
 
 def test_processing_failure_keeps_json_error(

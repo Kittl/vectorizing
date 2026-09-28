@@ -42,6 +42,7 @@ def customer_svg(request: pytest.FixtureRequest) -> tuple[str, tuple[int, ...]]:
             image,
             request.param,
             Timer(),
+            "experimental",
         ).solve()
     # On this fixture the cream background is the last RGB-ordered color, not
     # the first foreground color. It must become the first emitted layer.

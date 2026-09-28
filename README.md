@@ -65,6 +65,8 @@ Capture each version into a different directory, then compare:
 python scripts/vectorization_outputs.py capture .user/before --source-root /path/to/baseline
 python scripts/vectorization_outputs.py capture .user/after
 python scripts/vectorization_outputs.py compare .user/before .user/after
+python scripts/vectorization_outputs.py capture .user/experimental --configuration experimental
+python scripts/vectorization_outputs.py compare .user/before .user/experimental  # for a newer-pipeline baseline
 python scripts/benchmark_vectorization.py --output .user/benchmark.json --case aftermath-16
 ```
 
@@ -73,6 +75,7 @@ python scripts/benchmark_vectorization.py --output .user/benchmark.json --case a
 - Benchmark timing covers the solver, SVG serialization and bounds, not file decoding, HTTP/S3 or rasterization. Each sample uses a fresh process; peak RSS includes imports, input preparation, warmups and output checks. Linux and macOS memory units are normalized to MiB.
 - Add `--baseline-root /path/to/baseline` to benchmark two trusted checkouts in alternating order, with exact-output checks. `--repeats` defaults to 3 and `--warmups` to 1 per process. Output mismatches exit `1` but still save the report; timings have no pass/fail threshold.
 - Reports include runtime/source fingerprints and raw samples. `--label` can record commit IDs. Checkouts share the installed dependencies; this is not a dependency-isolated or production/concurrency benchmark. Use only trusted source roots.
+- Captures and benchmarks use the source checkout's default color configuration unless `--configuration experimental` is passed. To compare the newer pipeline with a checkout from before configurations existed, pass `--configuration experimental` for the candidate and leave the baseline unconfigured. For two configured checkouts, `--baseline-configuration experimental` selects the baseline independently; unknown configurations fail rather than silently using a default. Binary cases ignore color configuration. Use the same `--case` selections for both captures, particularly when an older checkout lacks newer fixtures.
 
 For Docker, build the current scripts and mount only the output directory:
 
@@ -96,6 +99,7 @@ The request format is the following:
 	url: string, // Image URL
 	solver: number, // Solver. 0 -> Binary, 1 -> Color
 	color_count: number, // Number of colors (if applicable)
+	configuration: string, // Optional color profile: "current" (default) or "experimental"
 	raw: boolean // If true, plain return plain SVG markup
 }
 ```
@@ -123,7 +127,9 @@ A typical response would be
 
 Or, if `raw = true` was supplied, just plain SVG markup
 
-Color processing uses a gentle 3-pixel bilateral filter and removes only connected
+Color processing can be selected per request with the optional `configuration` JSON field. The default `current` profile uses the original color quantization and layer clipping behavior. Set `configuration` to `experimental` to use the newer quantization, overlap-based layers, and opaque-background detection/isolation. The profiles are assembled from independently switchable solver stages, so behavior can be compared without removing either implementation. Unknown profile names are rejected with `INVALID_PARAMETERS`.
+
+The `experimental` profile's color processing uses a gentle 3-pixel bilateral filter and removes only connected
 components smaller than eight processed-image pixels, rather than rejecting thin
 regions based on their shape. Transparent pixels are protected; on opaque images,
 the most common surviving perimeter color is also protected to retain small
@@ -138,15 +144,14 @@ constrains any outlying curve control points to the canvas. It keeps smooth edit
 vectors instead of failing the request, but can adjust curves near the canvas and
 round corners inward, reducing edge coverage on the affected layer.
 
-SVGs use compact absolute/relative commands on an integer hundredth-pixel grid,
-inside a `scale(.01)` group. This preserves the previous two-decimal coordinate
-rounding, viewport, paint order and opacity without raster images or SVG strokes.
-Binary tracing is unchanged, but both solvers use the compact serializer. Equivalent
-geometry can produce small renderer-specific antialiasing differences; exact pixel
-identity across viewers and zoom levels is not guaranteed. Potrace and pypotrace
-remain dependencies under their existing GPL licenses.
+The default color profile uses the original two-decimal SVG serialization.
+Binary and `experimental` color responses use compact absolute/relative commands
+on an integer hundredth-pixel grid inside a `scale(.01)` group. All profiles emit
+editable vectors without raster images or strokes. Equivalent geometry can produce
+small renderer-specific antialiasing differences across viewers and zoom levels.
+Potrace and pypotrace remain dependencies under their existing GPL licenses.
 
-Color layers have cutouts with a small overlap along shared edges to hide seams.
+The `experimental` color layers have cutouts with a small overlap along shared edges to hide seams.
 The overlap is two pixels in the resized image before tracing, not screen pixels.
 Hiding a color can expose this rim; very thin features may remain covered, and
 zooming in makes the rim larger. No SVG strokes are added.
