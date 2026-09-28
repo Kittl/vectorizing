@@ -5,6 +5,8 @@ from collections import Counter
 import cv2
 import numpy as np
 from PIL import Image
+from scipy.ndimage import distance_transform_edt
+from skimage.measure import label
 
 
 def legacy_initial_centroids(img_arr: np.ndarray, color_count: int) -> np.ndarray:
@@ -41,6 +43,46 @@ def legacy_create_bitmaps(
             bitmap_x += bitmaps[y]
         bitmaps[x] = bitmap_x
     return bitmaps, colors
+
+
+def original_area_cleanup(labels: np.ndarray, color_count: int) -> np.ndarray:
+    """Run the original pairwise-dilation component cleanup on a small label grid."""
+    shifted = labels + 1
+    clusters = [
+        np.where(shifted == index + 1, index + 1, 0).astype(np.uint16)
+        for index in range(color_count)
+    ]
+    original = [label(cluster) + 1 for cluster in clusters]
+    counts = [np.bincount(components.ravel()) for components in original]
+    remaining = [components.copy() for components in original]
+    for x, cluster_x in enumerate(clusters):
+        dilated = cv2.dilate(cluster_x, np.ones((2, 2)))
+        for y, cluster_y in enumerate(clusters):
+            if x != y:
+                remaining[y] = np.where(
+                    np.logical_and(dilated, cluster_y),
+                    0,
+                    remaining[y],
+                )
+    for x, components in enumerate(remaining):
+        current = np.bincount(components.ravel(), minlength=len(counts[x]))
+        ratio = np.divide(
+            current.astype(np.float32),
+            counts[x].astype(np.float32),
+            out=np.ones(len(counts[x]), dtype=np.float32),
+            where=counts[x] != 0,
+        )
+        clusters[x] = np.where(ratio[original[x]] <= 0.1, 0, clusters[x])
+    enhanced = np.zeros(labels.shape, dtype=np.uint8)
+    for cluster in clusters:
+        enhanced = np.where(enhanced == 0, cluster, enhanced)
+    nearest = distance_transform_edt(
+        enhanced == 0,
+        return_distances=False,
+        return_indices=True,
+    )
+    enhanced = np.where(enhanced != 0, enhanced, enhanced[tuple(nearest)])
+    return enhanced - 1
 
 
 def reference_clean_components(

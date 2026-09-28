@@ -40,7 +40,7 @@ def test_color_optimizations_preserve_vectorization(
 ) -> None:
     """Compare SVG, colors, dimensions and bounds with independent operation oracles."""
     with Image.open(Path(__file__).parent / "images" / image_name) as image:
-        actual = ColorSolver(image, color_count, Timer()).solve()
+        actual = ColorSolver(image, color_count, Timer(), "experimental").solve()
         target, legacy = {
             "centroids": (
                 "vectorizing.solvers.color.quantize.get_initial_centroids",
@@ -58,7 +58,7 @@ def test_color_optimizations_preserve_vectorization(
         # Patch each lookup site and verify the legacy implementation was used.
         reference = Mock(wraps=legacy)
         monkeypatch.setattr(target, reference)
-        expected = ColorSolver(image, color_count, Timer()).solve()
+        expected = ColorSolver(image, color_count, Timer(), "experimental").solve()
         reference.assert_called_once()
 
     actual_paths, actual_colors, actual_width, actual_height = actual

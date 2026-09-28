@@ -20,7 +20,7 @@ from vectorizing.svg.markup import generate_SVG_markup
 def test_opaque_artwork_has_no_alpha_seams(filename: str, count: int) -> None:
     """Keep opaque artwork opaque through every shared boundary."""
     with Image.open(Path(__file__).parent / "images" / filename) as image:
-        result = ColorSolver(image, count, Timer()).solve()
+        result = ColorSolver(image, count, Timer(), "experimental").solve()
     markup = generate_SVG_markup(*result)
     pixels = np.asarray(Image.open(BytesIO(svg2png(bytestring=markup))).convert("RGBA"))
     np.testing.assert_array_equal(pixels[:, :, 3], 255)
@@ -47,7 +47,12 @@ def test_aftermath_retains_holes_when_layers_are_edited(
         rim_builder,
     )
     with Image.open(Path(__file__).parent / "images" / "aftermath.png") as image:
-        paths, colors, width, height = ColorSolver(image, 16, Timer()).solve()
+        paths, colors, width, height = ColorSolver(
+            image,
+            16,
+            Timer(),
+            "experimental",
+        ).solve()
     rim_builder.assert_called_once()
     markup = generate_SVG_markup(paths, colors, width, height)
     full = np.asarray(Image.open(BytesIO(svg2png(bytestring=markup))).convert("RGBA"))

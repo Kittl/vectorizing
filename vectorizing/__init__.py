@@ -16,8 +16,12 @@ from vectorizing.server.logs import setup_logs
 from vectorizing.server.s3 import upload_markup
 from vectorizing.server.timer import Timer
 from vectorizing.solvers.binary.BinarySolver import BinarySolver
-from vectorizing.solvers.color.ColorSolver import ColorSolver
-from vectorizing.svg.markup import generate_SVG_markup
+from vectorizing.solvers.color.ColorSolver import (
+    CONFIGURATIONS,
+    DEFAULT_CONFIGURATION,
+    ColorSolver,
+)
+from vectorizing.svg.markup import generate_original_SVG_markup, generate_SVG_markup
 from vectorizing.util.read import try_read_image_from_url
 
 # 0 -> BinarySolver
@@ -46,9 +50,10 @@ def process_color(
     img: Image.Image,
     color_count: int | None,
     timer: Timer,
+    configuration: str = DEFAULT_CONFIGURATION,
 ) -> list[list[Path] | list[np.ndarray] | int]:
-    """Trace color layers with bounded overlaps and return processed dimensions."""
-    solver = ColorSolver(img, color_count, timer)
+    """Trace color layers using a named processing configuration."""
+    solver = ColorSolver(img, color_count, timer, configuration)
     return solver.solve()
 
 
@@ -59,6 +64,10 @@ def validate_args(args: dict[str, object]) -> SimpleNamespace | Literal[False]:
 
     solver = args.get("solver", DEFAULT_SOLVER)
     if solver not in SOLVERS:
+        return False
+
+    configuration = args.get("configuration", DEFAULT_CONFIGURATION)
+    if not isinstance(configuration, str) or configuration not in CONFIGURATIONS:
         return False
 
     box = args.get("crop_box")
@@ -76,6 +85,7 @@ def validate_args(args: dict[str, object]) -> SimpleNamespace | Literal[False]:
         url=args.get("url"),
         raw=args.get("raw"),
         color_count=args.get("color_count"),
+        configuration=configuration,
     )
 
 
@@ -100,6 +110,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         url = args.url
         solver = args.solver
         color_count = args.color_count
+        configuration = args.configuration
         raw = args.raw
         crop_box = args.crop_box
 
@@ -120,13 +131,19 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
 
             else:
                 timer.start_timer("Color Solver - Total")
-                solved = process_color(img, color_count, timer)
+                solved = process_color(img, color_count, timer, configuration)
                 timer.end_timer()
 
             compound_paths, colors, width, height = solved
 
             timer.start_timer("Markup Creation")
-            markup = generate_SVG_markup(compound_paths, colors, width, height)
+            serialize = (
+                generate_original_SVG_markup
+                if solver == 1
+                and CONFIGURATIONS[configuration].original_svg_serialization
+                else generate_SVG_markup
+            )
+            markup = serialize(compound_paths, colors, width, height)
             timer.end_timer()
 
             if raw:

@@ -8,7 +8,8 @@ to S3. Start with `README.md` for setup and usage.
 
 - `vectorizing/__init__.py`: app factory, request validation, cropping and API responses.
 - `vectorizing/solvers/binary/`: binary masks and tracing.
-- `vectorizing/solvers/color/`: quantization, cluster cleanup, ordered masks and tracing.
+- `vectorizing/solvers/color/`: original and experimental quantization, cluster cleanup,
+  ordered masks and tracing; `ColorSolver.py` defines named color configurations.
 - `vectorizing/geometry/` and `vectorizing/svg/`: path conversion, bounds and SVG serialization.
 - `vectorizing/util/`: image loading, color-mode normalization and size limits.
 - `vectorizing/server/`: environment settings, S3, logging and timing.
@@ -48,14 +49,22 @@ docker compose --profile testing run --build --rm test \
 
 - Keep smooth anti-aliasing and transparent exteriors. Do not hide seams with SVG
   strokes or `shape-rendering="crispEdges"`, or reduce normal tracing quality.
-- Color masks use bounded overlaps, not full underpainting. The current rim is
-  two processed-image pixels; zoom enlarges it and very thin features may remain
-  covered. Do not promise universally exact holes and seam-free rendering.
-- Preserve palette/centroid ordering, dtypes and overflow behavior, connectivity,
-  and independent mask storage when optimizing arrays. Rim conversion runs forward
-  because the next mask must still be cumulative.
+- Color requests default to `configuration: "current"` (original quantization,
+  layer clipping and SVG formatting). POST JSON may select `"experimental"` for the
+  newer quantization, bounded two-pixel rims, opaque-background detection/isolation
+  and compact SVG formatting. Both profiles share bitmap creation. Keep binary
+  output unaffected by color configuration changes.
+- Experimental color masks use bounded overlaps, not full underpainting. Zoom
+  enlarges the two-processed-pixel rim, and very thin features may remain covered.
+  Do not promise universally exact holes and seam-free rendering.
+- Preserve each profile's palette/centroid ordering, dtypes and overflow behavior,
+  connectivity, and independent mask storage when optimizing arrays. Original
+  cleanup streams one color at a time to avoid retaining component grids for all
+  colors; compare it with the independent pairwise reference when changing it.
+  Experimental rim conversion runs forward because the next mask must still be
+  cumulative.
 - Preserve public defaults, response/error shapes, return containers, SVG paint
-  order and numeric formatting during refactors or performance work.
+  order and each profile's numeric formatting during refactors or performance work.
 - Image readers currently wrap all loading failures, including interrupts, and URL
   downloads have no timeout. These are tested legacy contracts, not recommendations;
   change them deliberately with updated tests, never incidentally during lint cleanup.
@@ -69,7 +78,9 @@ docker compose --profile testing run --build --rm test \
   **not** prove equivalence; do not delete or replace baselines just to make tests pass.
 - For output-preserving changes, capture before editing (or use a trusted baseline
   checkout), then compare SVG bytes, RGBA pixels, palettes, dimensions and bounds
-  with `scripts/vectorization_outputs.py`. See the README for commands.
+  with `scripts/vectorization_outputs.py`. Its default capture exercises `current`;
+  pass `--configuration experimental` to capture or benchmark the newer pipeline.
+  Benchmarks can select a separate `--baseline-configuration`. See the README.
 - For layer/geometry changes, check layer deletion, zero alpha and half opacity,
   transparent backgrounds and thin features, including `aftermath.png`. An assembled
   render alone cannot establish editability.

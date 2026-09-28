@@ -129,7 +129,7 @@ def test_partial_alpha_uses_existing_transparency_classification(
     labels, palette = background_labels
     rgba = np.dstack([palette[labels], np.full(labels.shape, 255, np.uint8)])
     rgba[0, 0, 3] = 217
-    result = ColorSolver(Image.fromarray(rgba), 3, Timer()).solve()
+    result = ColorSolver(Image.fromarray(rgba), 3, Timer(), "experimental").solve()
     assert isinstance(result, list)
     np.testing.assert_array_equal(result[1][0], palette[2])
 
@@ -181,7 +181,15 @@ def test_isolation_failure_retains_complete_original_output(
     monkeypatch.setattr("vectorizing.solvers.color.ColorSolver.op", controlled_op)
     upload = Mock(return_value="original-layers")
     monkeypatch.setattr("vectorizing.upload_markup", upload)
-    response = client.post("/", json={"url": "unused", "solver": 1, "raw": raw})
+    response = client.post(
+        "/",
+        json={
+            "url": "unused",
+            "solver": 1,
+            "configuration": "experimental",
+            "raw": raw,
+        },
+    )
     assert response.status_code == 200
     if raw:
         markup = response.data.decode()

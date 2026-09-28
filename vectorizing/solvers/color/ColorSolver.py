@@ -1,6 +1,7 @@
 """Trace editable color layers with bounded overlap at shared edges."""
 
 import logging
+from dataclasses import dataclass
 
 import numpy as np
 import potrace
@@ -9,6 +10,7 @@ from PIL import Image
 
 from vectorizing.geometry.potrace import potrace_path_to_compound_path
 from vectorizing.server.timer import Timer
+from vectorizing.solvers.color import legacy
 from vectorizing.solvers.color.bitmaps import (
     add_bitmap_rims,
     create_background_bitmap,
@@ -16,6 +18,28 @@ from vectorizing.solvers.color.bitmaps import (
 )
 from vectorizing.solvers.color.quantize import quantize
 from vectorizing.util.limit_size import limit_size
+
+
+@dataclass(frozen=True)
+class ColorConfiguration:
+    """Switchable color-processing stages collected into named presets."""
+
+    original_quantization: bool = False
+    original_layer_clipping: bool = False
+    detect_opaque_background: bool = True
+    original_svg_serialization: bool = False
+
+
+CONFIGURATIONS = {
+    "current": ColorConfiguration(
+        original_quantization=True,
+        original_layer_clipping=True,
+        detect_opaque_background=False,
+        original_svg_serialization=True,
+    ),
+    "experimental": ColorConfiguration(),
+}
+DEFAULT_CONFIGURATION = "current"
 
 
 def _trace_mask(bitmap: np.ndarray) -> Path:
@@ -70,7 +94,13 @@ def trace_bitmap(bitmap: np.ndarray, *, recover_clip: bool = True) -> Path:
 class ColorSolver:
     """Resize and quantize an image, then trace its ordered color layers."""
 
-    def __init__(self, img: Image.Image, color_count: int | None, timer: Timer) -> None:
+    def __init__(
+        self,
+        img: Image.Image,
+        color_count: int | None,
+        timer: Timer,
+        configuration: str = DEFAULT_CONFIGURATION,
+    ) -> None:
         color_count = color_count or ColorSolver.DEFAULT_COLOR_COUNT
         color_count = max(color_count, ColorSolver.MIN_COLOR_COUNT)
         color_count = min(color_count, ColorSolver.MAX_COLOR_COUNT)
@@ -82,21 +112,39 @@ class ColorSolver:
         self.img_arr = np.asarray(self.img).astype(np.uint8)
 
         self.timer = timer
+        self.configuration = CONFIGURATIONS[configuration]
 
     def solve(self) -> list[list[Path] | list[np.ndarray] | int]:
         """Return paths, colors, width and height as a list."""
         self.timer.start_timer("Quantization")
-        labels, colors, has_background = quantize(self.img_arr, self.color_count)
+        quantizer = (
+            legacy.quantize if self.configuration.original_quantization else quantize
+        )
+        labels, colors, has_background = quantizer(self.img_arr, self.color_count)
         self.timer.end_timer()
 
         self.timer.start_timer("Bitmap Creation")
-        background_bitmap = create_background_bitmap(labels, colors, has_background)
+        background_bitmap = (
+            create_background_bitmap(labels, colors, has_background)
+            if self.configuration.detect_opaque_background
+            else None
+        )
         bitmaps, colors = create_bitmaps(labels, colors, has_background)
-        add_bitmap_rims(bitmaps)
+        if not self.configuration.original_layer_clipping:
+            add_bitmap_rims(bitmaps)
         self.timer.end_timer()
 
         self.timer.start_timer("Bitmap Tracing")
-        compound_paths = [trace_bitmap(bitmap) for bitmap in bitmaps]
+        if self.configuration.original_layer_clipping:
+            traced = [potrace.Bitmap(bitmap).trace() for bitmap in bitmaps]
+            compound_paths = legacy.remove_layering(
+                traced,
+                self.img.size[0],
+                self.img.size[1],
+                has_background,
+            )
+        else:
+            compound_paths = [trace_bitmap(bitmap) for bitmap in bitmaps]
         if background_bitmap is not None:
             try:
                 background = trace_bitmap(background_bitmap, recover_clip=False)

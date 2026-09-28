@@ -87,6 +87,49 @@ def test_changed_metadata_fails(
     assert outputs.main(["compare", str(before), str(after)]) == 1
 
 
+def test_capture_selects_both_color_profiles(tmp_path: Path) -> None:
+    """Profile selection changes real solver and SVG bytes, not only metadata."""
+    default = tmp_path / "current"
+    explicit = tmp_path / "explicit-current"
+    experimental = tmp_path / "experimental"
+    options = ["--case", "black_rectangle_color"]
+    assert outputs.main(["capture", str(default), *options]) == 0
+    assert (
+        outputs.main(["capture", str(explicit), *options, "--configuration", "current"])
+        == 0
+    )
+    assert outputs.main(["compare", str(default), str(explicit)]) == 0
+    assert (
+        outputs.main(
+            ["capture", str(experimental), *options, "--configuration", "experimental"],
+        )
+        == 0
+    )
+    assert (
+        json.loads((experimental / "outputs.json").read_text())["configuration"]
+        == "experimental"
+    )
+    assert outputs.main(["compare", str(default), str(experimental)]) == 1
+
+
+@pytest.mark.parametrize("case", ["black_rectangle_color", "1px_binary"])
+def test_invalid_source_configuration_fails(tmp_path: Path, case: str) -> None:
+    """Unknown names cannot silently appear in reports, even for binary cases."""
+    with pytest.raises(SystemExit) as error:
+        outputs.main(
+            [
+                "capture",
+                str(tmp_path),
+                "--case",
+                case,
+                "--configuration",
+                "missing",
+            ],
+        )
+    assert error.value.code == 2
+    assert not (tmp_path / "outputs.json").exists()
+
+
 def test_changed_svg_fails(tmp_path: Path, fake_solver: None) -> None:
     """Different SVG bytes fail even when both versions render identically."""
     before, after = tmp_path / "before", tmp_path / "after"
@@ -225,7 +268,13 @@ def test_alternation_medians_and_equality(monkeypatch: pytest.MonkeyPatch) -> No
     order = []
     times = {"baseline": iter([9, 1, 5]), "candidate": iter([3, 1, 2])}
 
-    def measure(name: str, root: Path, warmups: int) -> dict[str, object]:
+    def measure(
+        name: str,
+        root: Path,
+        warmups: int,
+        configuration: str | None,
+    ) -> dict[str, object]:
+        assert configuration is None
         order.append(root.name)
         assert name == "bubbles" and warmups == 2
         return {
@@ -263,7 +312,13 @@ def test_benchmark_mismatches_save_failing_report(
 ) -> None:
     """Cross-version changes and within-process nondeterminism both fail the command."""
 
-    def measure(name: str, root: Path, warmups: int) -> dict[str, object]:
+    def measure(
+        name: str,
+        root: Path,
+        warmups: int,
+        configuration: str | None,
+    ) -> dict[str, object]:
+        assert configuration is None
         return {
             "elapsed_ms": 1,
             "peak_rss_mib": 2,
@@ -289,6 +344,52 @@ def test_benchmark_mismatches_save_failing_report(
         == 1
     )
     assert json.loads(path.read_text())["outputs_equal"] is False
+
+
+def test_benchmark_selects_each_profile_independently(tmp_path: Path) -> None:
+    """Fresh workers use the selected baseline and candidate profiles."""
+    report = tmp_path / "benchmark.json"
+    assert (
+        bench.main(
+            [
+                "--output",
+                str(report),
+                "--baseline-root",
+                str(shared.ROOT),
+                "--baseline-configuration",
+                "experimental",
+                "--configuration",
+                "experimental",
+                "--case",
+                "black_rectangle_color",
+                "--repeats",
+                "1",
+                "--warmups",
+                "0",
+            ],
+        )
+        == 0
+    )
+    data = json.loads(report.read_text())
+    assert data["configurations"] == {
+        "baseline": "experimental",
+        "candidate": "experimental",
+    }
+    assert data["outputs_equal"]
+
+
+def test_baseline_configuration_requires_checkout(tmp_path: Path) -> None:
+    """Do not silently discard a requested baseline profile."""
+    with pytest.raises(SystemExit) as error:
+        bench.main(
+            [
+                "--output",
+                str(tmp_path / "report.json"),
+                "--baseline-configuration",
+                "experimental",
+            ],
+        )
+    assert error.value.code == 2
 
 
 def test_warmups_and_instability(
