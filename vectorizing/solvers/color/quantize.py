@@ -10,6 +10,74 @@ from skimage.measure import label
 MIN_COMPONENT_AREA = 8
 
 
+def auto_color_count(
+    img_arr: np.ndarray, background: np.ndarray | None
+) -> tuple[int, np.ndarray | None, Image.Quantize]:
+    """Return color count, representative visible RGB and chosen seed method.
+
+    Small sample palettes choose K and the K-means initialization method; the
+    selected profile still quantizes the full processed image with its own filter.
+    """
+    pixels = (
+        img_arr[background == 0, :3]
+        if background is not None
+        else img_arr[:, :, :3].reshape(-1, 3)
+    )
+    if not len(pixels):
+        return 1, None, Image.Quantize.FASTOCTREE
+    if len(pixels) > 65536:
+        # Fixed-seed sampling avoids row-aligned strides hiding whole features.
+        indices = np.random.default_rng(0).choice(len(pixels), 65536, replace=False)
+        pixels = pixels[indices]
+    sample = Image.fromarray(pixels.reshape(1, -1, 3))
+    best_count = 0
+    representative = None
+    chosen_method = Image.Quantize.FASTOCTREE
+    # Octree keeps small vivid accents; median cut separates large close tones.
+    for method in (Image.Quantize.FASTOCTREE, Image.Quantize.MEDIANCUT):
+        palette_image = sample.quantize(16, method=method)
+        palette = np.asarray(palette_image.getpalette("RGB"), dtype=np.uint8).reshape(
+            -1, 3
+        )
+        entries = sorted(palette_image.getcolors(), reverse=True)
+        dominant: list[np.ndarray] = []
+        for size, index in entries:
+            share = size / len(pixels)
+            if share < 0.005:
+                continue
+            color = palette[index].astype(np.float32)
+            # Large, subtly different regions (e.g. a patterned background)
+            # matter even when their RGB distance is below the edge-shade cutoff.
+            separation = 8 if share >= 0.1 else 25
+            if any(np.linalg.norm(color - other) < separation for other in dominant):
+                continue
+            # Small blended edge colors lie between two stronger colors; large
+            # intermediate regions can be real artwork and must keep their slot.
+            if share < 0.03 and any(
+                np.linalg.norm(
+                    color
+                    - first
+                    - np.clip(
+                        np.dot(color - first, second - first)
+                        / np.dot(second - first, second - first),
+                        0,
+                        1,
+                    )
+                    * (second - first)
+                )
+                < 25
+                for i, first in enumerate(dominant)
+                for second in dominant[i + 1 :]
+            ):
+                continue
+            dominant.append(color)
+        if len(dominant) > best_count:
+            best_count = len(dominant)
+            representative = palette[entries[0][1]]
+            chosen_method = method
+    return max(1, best_count), representative, chosen_method
+
+
 def bilateral_filter(img_arr: np.ndarray) -> np.ndarray:
     """Gently smooth local color noise without the broad blur of a large kernel."""
     return cv2.bilateralFilter(img_arr, 3, 12, 1)
@@ -105,10 +173,14 @@ def write_background_cluster(labels: np.ndarray, bg_cluster: np.ndarray) -> np.n
     return labels
 
 
-def get_initial_centroids(img_arr: np.ndarray, color_count: int) -> np.ndarray:
+def get_initial_centroids(
+    img_arr: np.ndarray,
+    color_count: int,
+    method: Image.Quantize = Image.Quantize.FASTOCTREE,
+) -> np.ndarray:
     """Return sorted unique used RGB palette colors for K-means initialization."""
     img = Image.fromarray(img_arr)
-    img = img.quantize(color_count, method=Image.Quantize.FASTOCTREE)
+    img = img.quantize(color_count, method=method)
     # Palette padding must not introduce additional clusters. RGB order affects
     # initialization, so sort the used entries rather than the entire pixel grid.
     used_indices = [index for _, index in img.getcolors()]
@@ -133,11 +205,18 @@ def kmeans(
 def quantize(
     img_arr: np.ndarray,
     color_count: int,
+    *,
+    auto_method: Image.Quantize | None = None,
 ) -> tuple[np.ndarray, np.ndarray, bool]:
     """Return area-cleaned labels, an RGB-ordered palette and background status."""
     background = get_background_cluster(img_arr) if img_arr.shape[-1] == 4 else None
     rgb = bilateral_filter(img_arr[:, :, :3].copy())
-    labels, colors = kmeans(rgb, get_initial_centroids(rgb, color_count))
+    centroids = (
+        get_initial_centroids(rgb, color_count, auto_method)
+        if auto_method is not None
+        else get_initial_centroids(rgb, color_count)
+    )
+    labels, colors = kmeans(rgb, centroids)
     labels = labels.reshape(rgb.shape[:2])
 
     # Paint order determines which neighboring colors may receive a bounded rim.

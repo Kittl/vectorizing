@@ -98,7 +98,7 @@ The request format is the following:
 {
 	url: string, // Image URL
 	solver: number, // Solver. 0 -> Binary, 1 -> Color
-	color_count: number, // Number of colors (if applicable)
+	color_count: number | "auto", // Number of colors, or choose 1–16 automatically (color solver only)
 	configuration: string, // Optional color profile: "current" (default) or "experimental"
 	raw: boolean // If true, plain return plain SVG markup
 }
@@ -127,6 +127,8 @@ A typical response would be
 
 Or, if `raw = true` was supplied, just plain SVG markup
 
+For color requests, set `color_count` to `"auto"` to estimate 1–16 dominant colors from the image (ignoring background pixels and small blended edges). When any pixel has zero alpha, pixels below half opacity are treated as background, matching color quantization. For example, `midnight_strike.png`, `geo_logo.png` and `test_logo.png` each select three. Auto compares octree and median-cut palettes to retain both vivid accents and subtly patterned backgrounds; numeric quantization is unchanged. Omitting `color_count` still defaults to six; numeric requests retain the existing 2–64 clamp. Automatic selection is a heuristic: very small accents may not contribute to the count.
+
 Color processing can be selected per request with the optional `configuration` JSON field. The default `current` profile uses the original color quantization and layer clipping behavior. Set `configuration` to `experimental` to use the newer quantization, overlap-based layers, and opaque-background detection/isolation. The profiles are assembled from independently switchable solver stages, so behavior can be compared without removing either implementation. Unknown profile names are rejected with `INVALID_PARAMETERS`.
 
 The `experimental` profile's color processing uses a gentle 3-pixel bilateral filter and removes only connected
@@ -136,7 +138,7 @@ the most common surviving perimeter color is also protected to retain small
 background-colored letter counters. This can retain extra small specks of that
 color. Tracing retains small paths and uses a curve optimization tolerance of 0.5.
 The existing 1,048,576-pixel area cap, default of six
-colors and supported range of 2–64 colors are unchanged. Color paths touching the
+colors and numeric range of 2–64 colors are unchanged. Color paths touching the
 canvas are extended before tracing and clipped back to the image so corners remain
 covered and returned bounds do not include the padding. If Skia rejects a canvas
 clip, that layer is retraced without padding and a warning is logged. Recovery
