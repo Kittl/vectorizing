@@ -48,7 +48,7 @@ def process_binary(img: Image.Image) -> tuple[list[Path], list[list[int]], int, 
 
 def process_color(
     img: Image.Image,
-    color_count: int | None,
+    color_count: int | str | None,
     timer: Timer,
     configuration: str = DEFAULT_CONFIGURATION,
 ) -> list[list[Path] | list[np.ndarray] | int]:
@@ -69,6 +69,9 @@ def validate_args(args: dict[str, object]) -> SimpleNamespace | Literal[False]:
     configuration = args.get("configuration", DEFAULT_CONFIGURATION)
     if not isinstance(configuration, str) or configuration not in CONFIGURATIONS:
         return False
+    color_count = args.get("color_count")
+    if solver == 1 and isinstance(color_count, str) and color_count not in ("auto", ""):
+        return False
 
     box = args.get("crop_box")
     if box:
@@ -84,7 +87,7 @@ def validate_args(args: dict[str, object]) -> SimpleNamespace | Literal[False]:
         solver=solver,
         url=args.get("url"),
         raw=args.get("raw"),
-        color_count=args.get("color_count"),
+        color_count=color_count,
         configuration=configuration,
     )
 

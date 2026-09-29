@@ -16,7 +16,11 @@ from vectorizing.solvers.color.bitmaps import (
     create_background_bitmap,
     create_bitmaps,
 )
-from vectorizing.solvers.color.quantize import quantize
+from vectorizing.solvers.color.quantize import (
+    auto_color_count,
+    get_background_cluster,
+    quantize,
+)
 from vectorizing.util.limit_size import limit_size
 
 
@@ -97,19 +101,35 @@ class ColorSolver:
     def __init__(
         self,
         img: Image.Image,
-        color_count: int | None,
+        color_count: int | str | None,
         timer: Timer,
         configuration: str = DEFAULT_CONFIGURATION,
     ) -> None:
-        color_count = color_count or ColorSolver.DEFAULT_COLOR_COUNT
-        color_count = max(color_count, ColorSolver.MIN_COLOR_COUNT)
-        color_count = min(color_count, ColorSolver.MAX_COLOR_COUNT)
-        self.color_count = color_count
-
         self.img = limit_size(img)
 
         # Init image array
         self.img_arr = np.asarray(self.img).astype(np.uint8)
+
+        self.auto_method = None
+        if color_count == "auto":
+            background = (
+                get_background_cluster(self.img_arr)
+                if self.img_arr.shape[-1] == 4
+                else None
+            )
+            self.color_count, representative, self.auto_method = auto_color_count(
+                self.img_arr,
+                background,
+            )
+            if background is not None and representative is not None:
+                # Both quantizers cluster background RGB before masking it;
+                # give it a visible color so it cannot consume a palette slot.
+                self.img_arr = self.img_arr.copy()
+                self.img_arr[background > 0, :3] = representative
+        else:
+            color_count = color_count or ColorSolver.DEFAULT_COLOR_COUNT
+            color_count = max(color_count, ColorSolver.MIN_COLOR_COUNT)
+            self.color_count = min(color_count, ColorSolver.MAX_COLOR_COUNT)
 
         self.timer = timer
         self.configuration = CONFIGURATIONS[configuration]
@@ -120,7 +140,11 @@ class ColorSolver:
         quantizer = (
             legacy.quantize if self.configuration.original_quantization else quantize
         )
-        labels, colors, has_background = quantizer(self.img_arr, self.color_count)
+        labels, colors, has_background = (
+            quantizer(self.img_arr, self.color_count, auto_method=self.auto_method)
+            if self.auto_method is not None
+            else quantizer(self.img_arr, self.color_count)
+        )
         self.timer.end_timer()
 
         self.timer.start_timer("Bitmap Creation")

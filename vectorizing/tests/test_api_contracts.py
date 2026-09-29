@@ -23,6 +23,7 @@ import vectorizing
         {"url": "image", "configuration": "legacy"},
         {"url": "image", "configuration": None},
         {"url": "image", "configuration": []},
+        {"url": "image", "solver": 1, "color_count": "automatic"},
     ],
 )
 def test_invalid_arguments_return_the_same_error(
@@ -41,6 +42,9 @@ def test_invalid_arguments_return_the_same_error(
     [
         {"url": "image"},
         {"url": "image", "configuration": "experimental"},
+        {"url": "image", "color_count": "auto"},
+        {"url": "image", "solver": 1, "color_count": ""},
+        {"url": "image", "solver": 0, "color_count": "ignored"},
         {"url": None},
         {"url": "image", "solver": True},
         {"url": "image", "crop_box": []},
@@ -58,9 +62,30 @@ def test_argument_validation_preserves_accepted_values(
         "solver": payload.get("solver", 0),
         "crop_box": payload.get("crop_box"),
         "raw": None,
-        "color_count": None,
+        "color_count": payload.get("color_count"),
         "configuration": payload.get("configuration", "current"),
     }
+
+
+def test_binary_ignores_string_color_count(
+    client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Leave unrelated color fields alone on the binary request path."""
+    monkeypatch.setattr(
+        vectorizing,
+        "try_read_image_from_url",
+        Mock(return_value=Image.new("RGB", (8, 8))),
+    )
+    response = client.post(
+        "/",
+        json={"url": "image", "solver": 0, "color_count": "ignored", "raw": True},
+    )
+    assert response.status_code == 200
+    assert (
+        response.data
+        == client.post("/", json={"url": "image", "solver": 0, "raw": True}).data
+    )
 
 
 @pytest.mark.parametrize("solver", [0, 1])

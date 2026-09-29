@@ -5,6 +5,7 @@ import numpy as np
 import potrace
 import scipy.ndimage as ndi
 from pathops import Path, PathOp, op
+from PIL import Image
 from skimage.measure import label
 
 from vectorizing.geometry.potrace import potrace_path_to_compound_path
@@ -18,6 +19,8 @@ from vectorizing.solvers.color.quantize import (
 def quantize(
     img_arr: np.ndarray,
     color_count: int,
+    *,
+    auto_method: Image.Quantize | None = None,
 ) -> tuple[np.ndarray, np.ndarray, bool]:
     """Run the original strong-filter and overlap-based component cleanup."""
     background = get_background_cluster(img_arr) if img_arr.shape[-1] == 4 else None
@@ -25,7 +28,12 @@ def quantize(
         cv2.cvtColor(img_arr, cv2.COLOR_RGBA2RGB) if img_arr.shape[-1] == 4 else img_arr
     )
     rgb = cv2.bilateralFilter(rgb.copy(), 7, 50, 50)
-    labels, colors = kmeans(rgb, get_initial_centroids(rgb, color_count))
+    centroids = (
+        get_initial_centroids(rgb, color_count, auto_method)
+        if auto_method is not None
+        else get_initial_centroids(rgb, color_count)
+    )
+    labels, colors = kmeans(rgb, centroids)
     labels = labels.reshape(rgb.shape[:2])
     if background is not None:
         labels = np.where(background > 0, 0, labels + 1)
