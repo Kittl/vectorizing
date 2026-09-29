@@ -129,6 +129,8 @@ Or, if `raw = true` was supplied, just plain SVG markup
 
 For color requests, set `color_count` to `"auto"` to estimate 1–16 dominant colors from the image (ignoring background pixels and small blended edges). When any pixel has zero alpha, pixels below half opacity are treated as background, matching color quantization. For example, `midnight_strike.png`, `geo_logo.png` and `test_logo.png` each select three. Auto compares octree and median-cut palettes to retain both vivid accents and subtly patterned backgrounds; numeric quantization is unchanged. Omitting `color_count` still defaults to six; numeric requests retain the existing 2–64 clamp. Automatic selection is a heuristic: very small accents may not contribute to the count.
 
+When auto selects one visible color, the binary solver traces it as black on transparent; an entirely transparent image remains empty. Auto requests use the color solver: omitting `solver` selects it, while explicitly sending `solver: 0` with `"auto"` is rejected rather than silently running a binary job.
+
 Color processing can be selected per request with the optional `configuration` JSON field. The default `current` profile uses the original color quantization and layer clipping behavior. Set `configuration` to `experimental` to use the newer quantization, overlap-based layers, and opaque-background detection/isolation. The profiles are assembled from independently switchable solver stages, so behavior can be compared without removing either implementation. Unknown profile names are rejected with `INVALID_PARAMETERS`.
 
 The `experimental` profile's color processing uses a gentle 3-pixel bilateral filter and removes only connected
