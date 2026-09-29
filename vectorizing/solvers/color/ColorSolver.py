@@ -10,6 +10,7 @@ from PIL import Image
 
 from vectorizing.geometry.potrace import potrace_path_to_compound_path
 from vectorizing.server.timer import Timer
+from vectorizing.solvers.binary.BinarySolver import BinarySolver
 from vectorizing.solvers.color import legacy
 from vectorizing.solvers.color.bitmaps import (
     add_bitmap_rims,
@@ -111,6 +112,7 @@ class ColorSolver:
         self.img_arr = np.asarray(self.img).astype(np.uint8)
 
         self.auto_method = None
+        self.binary_fallback = False
         if color_count == "auto":
             background = (
                 get_background_cluster(self.img_arr)
@@ -121,6 +123,7 @@ class ColorSolver:
                 self.img_arr,
                 background,
             )
+            self.binary_fallback = self.color_count == 1 and representative is not None
             if background is not None and representative is not None:
                 # Both quantizers cluster background RGB before masking it;
                 # give it a visible color so it cannot consume a palette slot.
@@ -134,8 +137,11 @@ class ColorSolver:
         self.timer = timer
         self.configuration = CONFIGURATIONS[configuration]
 
-    def solve(self) -> list[list[Path] | list[np.ndarray] | int]:
+    def solve(self) -> list[list[Path] | list[np.ndarray] | list[list[int]] | int]:
         """Return paths, colors, width and height as a list."""
+        if self.binary_fallback:
+            return list(BinarySolver(self.img).solve())
+
         self.timer.start_timer("Quantization")
         quantizer = (
             legacy.quantize if self.configuration.original_quantization else quantize

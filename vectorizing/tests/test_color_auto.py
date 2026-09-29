@@ -12,6 +12,7 @@ from PIL import Image
 
 import vectorizing
 from vectorizing.server.timer import Timer
+from vectorizing.solvers.binary.BinarySolver import BinarySolver
 from vectorizing.solvers.color.ColorSolver import ColorSolver
 from vectorizing.svg.markup import generate_original_SVG_markup, generate_SVG_markup
 from vectorizing.util.read import convert_RGB_A
@@ -134,6 +135,52 @@ def test_kittl_logo_accent_has_its_own_layer(configuration: str) -> None:
     paths, colors, _, _ = solver.solve()
     assert solver.color_count == len(paths) == len(colors) == 3
     assert any(160 < color[1] and color[2] < 120 for color in colors)
+
+
+@pytest.mark.parametrize("configuration", ["current", "experimental"])
+def test_visible_single_color_auto_traces_with_binary_solver(
+    configuration: str,
+) -> None:
+    """Turn white text on transparent canvas into a black transparent SVG."""
+    with Image.open(Path(__file__).parent / "images" / "white_text.png") as source:
+        image = convert_RGB_A(source)
+        solver = ColorSolver(image, "auto", Timer(), configuration)
+        actual = solver.solve()
+        expected = BinarySolver(image).solve()
+    serialize = (
+        generate_original_SVG_markup
+        if configuration == "current"
+        else generate_SVG_markup
+    )
+    assert isinstance(actual, list)
+    assert solver.color_count == 1
+    assert actual[1] == [[0, 0, 0, 1]]
+    assert serialize(*actual) == serialize(*expected)
+    raster = Image.open(
+        BytesIO(svg2png(bytestring=serialize(*actual).encode())),
+    ).convert("RGBA")
+    assert raster.getchannel("A").getextrema() == (0, 255)
+
+
+@pytest.mark.parametrize("configuration", ["current", "experimental"])
+def test_fully_transparent_auto_does_not_trace_a_black_rectangle(
+    configuration: str,
+) -> None:
+    """No visible color means there is no artwork for the binary fallback."""
+    with Image.open(Path(__file__).parent / "images" / "empty.png") as source:
+        solver = ColorSolver(convert_RGB_A(source), "auto", Timer(), configuration)
+        paths, colors, width, height = solver.solve()
+    assert solver.color_count == 1
+    assert paths == colors == []
+    serialize = (
+        generate_original_SVG_markup
+        if configuration == "current"
+        else generate_SVG_markup
+    )
+    raster = Image.open(
+        BytesIO(svg2png(bytestring=serialize(paths, colors, width, height).encode())),
+    ).convert("RGBA")
+    assert raster.getchannel("A").getextrema() == (0, 0)
 
 
 def test_large_intermediate_color_is_not_treated_as_an_edge() -> None:

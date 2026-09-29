@@ -24,6 +24,7 @@ import vectorizing
         {"url": "image", "configuration": None},
         {"url": "image", "configuration": []},
         {"url": "image", "solver": 1, "color_count": "automatic"},
+        {"url": "image", "solver": 0, "color_count": "auto"},
     ],
 )
 def test_invalid_arguments_return_the_same_error(
@@ -59,12 +60,22 @@ def test_argument_validation_preserves_accepted_values(
     assert isinstance(result, SimpleNamespace)
     assert vars(result) == {
         "url": payload["url"],
-        "solver": payload.get("solver", 0),
+        "solver": payload.get(
+            "solver",
+            1 if payload.get("color_count") == "auto" else 0,
+        ),
         "crop_box": payload.get("crop_box"),
         "raw": None,
         "color_count": payload.get("color_count"),
         "configuration": payload.get("configuration", "current"),
     }
+
+
+def test_omitted_solver_with_auto_selects_color() -> None:
+    """Do not silently treat an auto-only request as a binary request."""
+    args = vectorizing.validate_args({"url": "image", "color_count": "auto"})
+    assert isinstance(args, SimpleNamespace)
+    assert args.solver == 1
 
 
 def test_binary_ignores_string_color_count(

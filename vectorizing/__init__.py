@@ -51,7 +51,7 @@ def process_color(
     color_count: int | str | None,
     timer: Timer,
     configuration: str = DEFAULT_CONFIGURATION,
-) -> list[list[Path] | list[np.ndarray] | int]:
+) -> list[list[Path] | list[np.ndarray] | list[list[int]] | int]:
     """Trace color layers using a named processing configuration."""
     solver = ColorSolver(img, color_count, timer, configuration)
     return solver.solve()
@@ -62,14 +62,16 @@ def validate_args(args: dict[str, object]) -> SimpleNamespace | Literal[False]:
     if "url" not in args:
         return False
 
-    solver = args.get("solver", DEFAULT_SOLVER)
+    color_count = args.get("color_count")
+    solver = args.get("solver", 1 if color_count == "auto" else DEFAULT_SOLVER)
     if solver not in SOLVERS:
         return False
 
     configuration = args.get("configuration", DEFAULT_CONFIGURATION)
     if not isinstance(configuration, str) or configuration not in CONFIGURATIONS:
         return False
-    color_count = args.get("color_count")
+    if solver == 0 and color_count == "auto":
+        return False
     if solver == 1 and isinstance(color_count, str) and color_count not in ("auto", ""):
         return False
 
