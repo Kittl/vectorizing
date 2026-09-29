@@ -68,7 +68,8 @@ def test_argument_validation_preserves_accepted_values(
 
 
 def test_binary_ignores_string_color_count(
-    client: FlaskClient, monkeypatch: pytest.MonkeyPatch
+    client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Leave unrelated color fields alone on the binary request path."""
     monkeypatch.setattr(
@@ -77,7 +78,8 @@ def test_binary_ignores_string_color_count(
         Mock(return_value=Image.new("RGB", (8, 8))),
     )
     response = client.post(
-        "/", json={"url": "image", "solver": 0, "color_count": "ignored", "raw": True}
+        "/",
+        json={"url": "image", "solver": 0, "color_count": "ignored", "raw": True},
     )
     assert response.status_code == 200
     assert (

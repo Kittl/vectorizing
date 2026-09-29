@@ -1,4 +1,4 @@
-"""Automatic palette size chooses dominant artwork colors without changing numeric mode."""
+"""Choose automatic palette sizes without changing numeric mode."""
 
 from io import BytesIO
 from pathlib import Path
@@ -87,7 +87,8 @@ def test_visible_pixel_sampling_cannot_lock_to_background_columns(
     solver = ColorSolver(Image.fromarray(pixels), "auto", Timer(), configuration)
     _, colors, _, _ = solver.solve()
     assert solver.color_count == 2
-    assert {tuple(color[:3]) for color in colors} == {(255, 255, 255), (255, 0, 0)}
+    expected = {(255, 255, 255), (255, 0, 0)}
+    assert {tuple(color[:3]) for color in colors} == expected
 
 
 @pytest.mark.parametrize("configuration", ["current", "experimental"])
@@ -152,7 +153,8 @@ def test_partially_transparent_pixels_count_as_visible() -> None:
 
 
 def test_auto_request_and_numeric_default_remain_distinct(
-    client: FlaskClient, monkeypatch: pytest.MonkeyPatch
+    client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Only the explicit auto string opts into estimation; numeric clamps remain."""
     monkeypatch.setattr(
@@ -164,7 +166,8 @@ def test_auto_request_and_numeric_default_remain_distinct(
     monkeypatch.setattr(vectorizing, "process_color", process)
     for count in ["auto", None, "", 1, 65]:
         response = client.post(
-            "/", json={"url": "image", "solver": 1, "raw": True, "color_count": count}
+            "/",
+            json={"url": "image", "solver": 1, "raw": True, "color_count": count},
         )
         assert response.status_code == 200
         assert process.call_args.args[1] == count

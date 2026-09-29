@@ -11,12 +11,25 @@ MIN_COMPONENT_AREA = 8
 
 
 def auto_color_count(
-    img_arr: np.ndarray, background: np.ndarray | None
+    img_arr: np.ndarray,
+    background: np.ndarray | None,
 ) -> tuple[int, np.ndarray | None, Image.Quantize]:
     """Return color count, representative visible RGB and chosen seed method.
 
     Small sample palettes choose K and the K-means initialization method; the
     selected profile still quantizes the full processed image with its own filter.
+
+    Parameters
+    ----------
+    img_arr : numpy.ndarray
+        Processed RGB or RGBA pixels.
+    background : numpy.ndarray or None
+        Nonzero at pixels that the quantizer treats as transparent background.
+
+    Returns
+    -------
+    tuple
+        Color count, representative RGB (or None), and seed method.
     """
     pixels = (
         img_arr[background == 0, :3]
@@ -37,7 +50,8 @@ def auto_color_count(
     for method in (Image.Quantize.FASTOCTREE, Image.Quantize.MEDIANCUT):
         palette_image = sample.quantize(16, method=method)
         palette = np.asarray(palette_image.getpalette("RGB"), dtype=np.uint8).reshape(
-            -1, 3
+            -1,
+            3,
         )
         entries = sorted(palette_image.getcolors(), reverse=True)
         dominant: list[np.ndarray] = []
@@ -63,7 +77,7 @@ def auto_color_count(
                         0,
                         1,
                     )
-                    * (second - first)
+                    * (second - first),
                 )
                 < 25
                 for i, first in enumerate(dominant)

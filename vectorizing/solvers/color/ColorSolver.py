@@ -118,7 +118,8 @@ class ColorSolver:
                 else None
             )
             self.color_count, representative, self.auto_method = auto_color_count(
-                self.img_arr, background
+                self.img_arr,
+                background,
             )
             if background is not None and representative is not None:
                 # Both quantizers cluster background RGB before masking it;
