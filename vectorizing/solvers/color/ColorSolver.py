@@ -149,7 +149,11 @@ class ColorSolver:
         labels, colors, has_background = (
             quantizer(self.img_arr, self.color_count, auto_method=self.auto_method)
             if self.auto_method is not None
-            else quantizer(self.img_arr, self.color_count)
+            else quantizer(
+                self.img_arr,
+                self.color_count,
+                recover_background_slots=True,
+            )
         )
         self.timer.end_timer()
 

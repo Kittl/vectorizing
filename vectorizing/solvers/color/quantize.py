@@ -92,6 +92,34 @@ def auto_color_count(
     return max(1, best_count), representative, chosen_method
 
 
+def _recover_background_slots(
+    img_arr: np.ndarray,
+    labels: np.ndarray,
+    cluster_count: int,
+    background: np.ndarray | None,
+) -> np.ndarray | None:
+    """Replace hidden RGB only for occupied, background-only raw clusters."""
+    # Inspect labels before masking or cleanup; losing a tiny visible component
+    # to cleanup is not evidence that hidden RGB consumed a palette slot.
+    if background is None:
+        return None
+    visible = background == 0
+    if not visible.any():
+        return None
+    visible_counts = np.bincount(labels[visible], minlength=cluster_count)
+    if (visible_counts > 0).all():
+        return None
+    counts = np.bincount(labels.ravel(), minlength=cluster_count)
+    if not np.any((counts > 0) & (visible_counts == 0)):
+        return None
+    _, representative, _ = auto_color_count(img_arr, background)
+    if representative is None:
+        return None
+    recovered = img_arr.copy()
+    recovered[~visible, :3] = representative
+    return recovered
+
+
 def bilateral_filter(img_arr: np.ndarray) -> np.ndarray:
     """Gently smooth local color noise without the broad blur of a large kernel."""
     return cv2.bilateralFilter(img_arr, 3, 12, 1)
@@ -221,17 +249,26 @@ def quantize(
     color_count: int,
     *,
     auto_method: Image.Quantize | None = None,
+    recover_background_slots: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, bool]:
-    """Return area-cleaned labels, an RGB-ordered palette and background status."""
+    """Return cleaned labels/palette, optionally recovering background-only slots."""
     background = get_background_cluster(img_arr) if img_arr.shape[-1] == 4 else None
-    rgb = bilateral_filter(img_arr[:, :, :3].copy())
-    centroids = (
-        get_initial_centroids(rgb, color_count, auto_method)
-        if auto_method is not None
-        else get_initial_centroids(rgb, color_count)
-    )
-    labels, colors = kmeans(rgb, centroids)
-    labels = labels.reshape(rgb.shape[:2])
+    for attempt in range(2):
+        rgb = bilateral_filter(img_arr[:, :, :3].copy())
+        centroids = (
+            get_initial_centroids(rgb, color_count, auto_method)
+            if auto_method is not None
+            else get_initial_centroids(rgb, color_count)
+        )
+        labels, colors = kmeans(rgb, centroids)
+        labels = labels.reshape(rgb.shape[:2])
+        if attempt or not recover_background_slots or auto_method is not None:
+            break
+        recovered = _recover_background_slots(img_arr, labels, len(colors), background)
+        if recovered is None:
+            break
+        # Retry the same numeric count and seed method, then clean only once.
+        img_arr = recovered
 
     # Paint order determines which neighboring colors may receive a bounded rim.
     order = np.lexsort(colors.T[::-1])

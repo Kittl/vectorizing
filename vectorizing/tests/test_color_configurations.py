@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import numpy as np
+import potrace
 import pytest
 from flask.testing import FlaskClient
 from PIL import Image
@@ -13,8 +14,9 @@ from PIL import Image
 import vectorizing
 from vectorizing.server.timer import Timer
 from vectorizing.solvers.color import legacy
+from vectorizing.solvers.color.bitmaps import create_bitmaps
 from vectorizing.solvers.color.ColorSolver import ColorSolver
-from vectorizing.svg.markup import generate_SVG_markup
+from vectorizing.svg.markup import generate_original_SVG_markup, generate_SVG_markup
 from vectorizing.tests.color_reference import original_area_cleanup
 from vectorizing.util.limit_size import limit_size
 from vectorizing.util.read import convert_RGB_A
@@ -153,11 +155,29 @@ def test_original_opaque_svg_matches_reference(
     )
 
 
+def test_original_transparent_serialization_matches_reference() -> None:
+    """Pin the original stages independently of numeric palette-slot recovery."""
+    image = transparent_artwork()
+    labels, colors, has_background = legacy.quantize(np.asarray(image), 4)
+    bitmaps, colors = create_bitmaps(labels, colors, has_background)
+    paths = legacy.remove_layering(
+        [potrace.Bitmap(bitmap).trace() for bitmap in bitmaps],
+        image.width,
+        image.height,
+        has_background,
+    )
+    markup = generate_original_SVG_markup(paths, colors, image.width, image.height)
+    # Captured from the original stages, not regenerated to match recovery.
+    assert hashlib.sha256(markup.encode()).hexdigest() == (
+        "901127e424e2944c199af568da7bf136373b825a8f2939b1df109ed0c1269632"
+    )
+
+
 def test_original_profile_is_http_default_and_experimental_is_independent(
     client: FlaskClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Pin original raw SVG bytes while keeping the newer pipeline selectable."""
+    """Keep the original serializer as HTTP default and profiles selectable."""
     image = transparent_artwork()
     monkeypatch.setattr(
         vectorizing,
@@ -170,9 +190,8 @@ def test_original_profile_is_http_default_and_experimental_is_independent(
     experimental = client.post("/", json={**base, "configuration": "experimental"})
     assert all(r.status_code == 200 for r in (default, original, experimental))
     assert default.data == original.data
-    # Captured from the pre-change solver and SVG serializer, not this implementation.
-    assert hashlib.sha256(default.data).hexdigest() == (
-        "901127e424e2944c199af568da7bf136373b825a8f2939b1df109ed0c1269632"
+    assert default.data.decode() == generate_original_SVG_markup(
+        *ColorSolver(image, 4, Timer(), "current").solve(),
     )
     assert experimental.data != default.data
     assert experimental.data.decode() == generate_SVG_markup(
