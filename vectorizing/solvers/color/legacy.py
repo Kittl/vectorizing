@@ -10,6 +10,7 @@ from skimage.measure import label
 
 from vectorizing.geometry.potrace import potrace_path_to_compound_path
 from vectorizing.solvers.color.quantize import (
+    _recover_background_slots,
     get_background_cluster,
     get_initial_centroids,
     kmeans,
@@ -21,20 +22,31 @@ def quantize(
     color_count: int,
     *,
     auto_method: Image.Quantize | None = None,
+    recover_background_slots: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, bool]:
-    """Run the original strong-filter and overlap-based component cleanup."""
+    """Run original cleanup, optionally recovering background-only palette slots."""
     background = get_background_cluster(img_arr) if img_arr.shape[-1] == 4 else None
-    rgb = (
-        cv2.cvtColor(img_arr, cv2.COLOR_RGBA2RGB) if img_arr.shape[-1] == 4 else img_arr
-    )
-    rgb = cv2.bilateralFilter(rgb.copy(), 7, 50, 50)
-    centroids = (
-        get_initial_centroids(rgb, color_count, auto_method)
-        if auto_method is not None
-        else get_initial_centroids(rgb, color_count)
-    )
-    labels, colors = kmeans(rgb, centroids)
-    labels = labels.reshape(rgb.shape[:2])
+    for attempt in range(2):
+        rgb = (
+            cv2.cvtColor(img_arr, cv2.COLOR_RGBA2RGB)
+            if img_arr.shape[-1] == 4
+            else img_arr
+        )
+        rgb = cv2.bilateralFilter(rgb.copy(), 7, 50, 50)
+        centroids = (
+            get_initial_centroids(rgb, color_count, auto_method)
+            if auto_method is not None
+            else get_initial_centroids(rgb, color_count)
+        )
+        labels, colors = kmeans(rgb, centroids)
+        labels = labels.reshape(rgb.shape[:2])
+        if attempt or not recover_background_slots or auto_method is not None:
+            break
+        recovered = _recover_background_slots(img_arr, labels, len(colors), background)
+        if recovered is None:
+            break
+        # Keep the original numeric seeding and defer cleanup until recovery ends.
+        img_arr = recovered
     if background is not None:
         labels = np.where(background > 0, 0, labels + 1)
         colors = np.vstack(
