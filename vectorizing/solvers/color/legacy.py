@@ -11,6 +11,7 @@ from skimage.measure import label
 from vectorizing.geometry.potrace import potrace_path_to_compound_path
 from vectorizing.solvers.color.quantize import (
     _recover_background_slots,
+    _remove_background_color_bias,
     get_background_cluster,
     get_initial_centroids,
     kmeans,
@@ -24,7 +25,7 @@ def quantize(
     auto_method: Image.Quantize | None = None,
     recover_background_slots: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, bool]:
-    """Run original cleanup, optionally recovering background-only palette slots."""
+    """Run original cleanup with optional numeric background color recovery."""
     background = get_background_cluster(img_arr) if img_arr.shape[-1] == 4 else None
     for attempt in range(2):
         rgb = (
@@ -47,6 +48,8 @@ def quantize(
             break
         # Keep the original numeric seeding and defer cleanup until recovery ends.
         img_arr = recovered
+    if recover_background_slots and auto_method is None:
+        colors = _remove_background_color_bias(rgb, labels, colors, background)
     if background is not None:
         labels = np.where(background > 0, 0, labels + 1)
         colors = np.vstack(

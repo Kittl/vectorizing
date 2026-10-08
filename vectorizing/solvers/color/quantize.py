@@ -120,6 +120,52 @@ def _recover_background_slots(
     return recovered
 
 
+def _remove_background_color_bias(
+    rgb: np.ndarray,
+    labels: np.ndarray,
+    colors: np.ndarray,
+    background: np.ndarray | None,
+) -> np.ndarray:
+    """Compensate shared centroids for hidden RGB without changing their labels."""
+    if background is None:
+        return colors
+    visible = (background == 0).ravel()
+    if not visible.any():
+        return colors
+    assigned = labels.ravel()
+    counts = np.bincount(assigned, minlength=len(colors))
+    visible_labels = assigned[visible]
+    visible_counts = np.bincount(visible_labels, minlength=len(colors))
+    shared = (visible_counts > 0) & (visible_counts < counts)
+    if not shared.any():
+        return colors
+
+    pixels = rgb.reshape(-1, 3)
+    visible_pixels = pixels[visible]
+    offset = np.empty((np.count_nonzero(shared), 3), dtype=np.float64)
+    for channel in range(3):
+        total = np.bincount(
+            assigned,
+            weights=pixels[:, channel],
+            minlength=len(colors),
+        )[shared]
+        seen = np.bincount(
+            visible_labels,
+            weights=visible_pixels[:, channel],
+            minlength=len(colors),
+        )[shared]
+        offset[:, channel] = seen / visible_counts[shared] - total / counts[shared]
+    # Keep FAISS's sampled centers and fixed assignments; remove only the mean
+    # contribution of masked pixels. Reassigning pixels would change layer masks.
+    corrected = colors.copy()
+    corrected[shared] = np.clip(
+        np.rint(colors[shared].astype(np.float64) + offset),
+        0,
+        255,
+    ).astype(colors.dtype)
+    return corrected
+
+
 def bilateral_filter(img_arr: np.ndarray) -> np.ndarray:
     """Gently smooth local color noise without the broad blur of a large kernel."""
     return cv2.bilateralFilter(img_arr, 3, 12, 1)
@@ -251,7 +297,7 @@ def quantize(
     auto_method: Image.Quantize | None = None,
     recover_background_slots: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, bool]:
-    """Return cleaned labels/palette, optionally recovering background-only slots."""
+    """Return cleaned labels/palette with optional numeric background recovery."""
     background = get_background_cluster(img_arr) if img_arr.shape[-1] == 4 else None
     for attempt in range(2):
         rgb = bilateral_filter(img_arr[:, :, :3].copy())
@@ -274,6 +320,9 @@ def quantize(
     order = np.lexsort(colors.T[::-1])
     labels = np.argsort(order)[labels].astype(np.uint16)
     colors = colors[order]
+    if recover_background_slots and auto_method is None:
+        # Correct fills after ordering so paint order and mask geometry stay fixed.
+        colors = _remove_background_color_bias(rgb, labels, colors, background)
     if background is not None:
         labels = write_background_cluster(labels, background)
         colors = np.vstack(
