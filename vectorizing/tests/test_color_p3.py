@@ -61,8 +61,35 @@ def test_aftermath_matches_approved_p3_geometry(
         "23d8c97dee23ea3f0b22d164d39f726f36ead7f2ce47048ca73326bf2731c7e8",  # ARM64
         "1f52fe3d8589574cc561bf5ab0dff6a9ce410292d79b9e05dcf0a781f2d919f3",  # x86_64
     }
+    # Numeric fills compensate hidden RGB without reassigning pixels or
+    # changing the approved layer ordering and geometry.
     np.testing.assert_array_equal(
         np.asarray(colors)[:, :3],
+        [
+            [6, 9, 22],
+            [19, 60, 148],
+            [27, 100, 202],
+            [40, 35, 63],
+            [193, 149, 161],
+            [212, 55, 118],
+            [234, 214, 216],
+            [248, 57, 61],
+        ],
+    )
+    assert (width, height) == (1024, 1024)
+    svg = generate_SVG_markup(paths, colors, width, height)
+    # Approved pre-encoding P3: 1,376,657 bytes. Do not discard geometry for size.
+    assert len(svg.encode()) < 760_000
+
+
+def test_aftermath_default_quantizer_keeps_original_palette() -> None:
+    """Keep the original lower-level palette when numeric recovery is not enabled."""
+    with Image.open(IMAGES / "aftermath.png") as image:
+        pixels = ColorSolver(image, 8, Timer(), "experimental").img_arr
+    _, colors, has_background = quantize(pixels, 8)
+    assert has_background
+    np.testing.assert_array_equal(
+        colors[1:, :3],
         [
             [2, 3, 8],
             [19, 60, 148],
@@ -74,10 +101,6 @@ def test_aftermath_matches_approved_p3_geometry(
             [248, 57, 61],
         ],
     )
-    assert (width, height) == (1024, 1024)
-    svg = generate_SVG_markup(paths, colors, width, height)
-    # Approved pre-encoding P3: 1,376,657 bytes. Do not discard geometry for size.
-    assert len(svg.encode()) < 760_000
 
 
 @pytest.fixture(scope="module")
